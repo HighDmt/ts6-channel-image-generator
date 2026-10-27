@@ -12,8 +12,12 @@ import {
 // TS6 client colors (measured from screenshots, see CLAUDE.md section 4)
 const ROW_BG = '#282A2C';
 const NAME_BACKDROP = '#1B1B1F';
-const NAME_BACKDROP_WIDTH = 150;
+const NAME_BACKDROP_WIDTH = 150;   // Fixed, does not grow with long names
+const NAME_BACKDROP_FADE_IN = 18;  // Backdrop fades in from the row's left edge, so a few px of image show
+const COLLAPSED_CHEVRON = '#1CC9FF';
 const IMAGE_FADE_WIDTH = 84;
+const HOVER_GROW = 2;              // On hover TS6 grows the row 2 px on every side; the image stays put
+const HOVER_OUTLINE = '#C0C0C0';
 
 const ControlsWrapper = styled.div`
   position: absolute;
@@ -30,11 +34,9 @@ const RoomWrapper = styled.div`
   margin-bottom: ${CHANNEL_GAP}px;
   margin-left: ${({$depthOffset}) => $depthOffset}px;
   width: calc(100% - ${({$depthOffset}) => $depthOffset}px);
-  border-radius: ${({$isSpacer}) => $isSpacer ? CHANNEL_HEIGHT / 2 : 10}px;
-  background-color: ${ROW_BG};
-  overflow: hidden;
   position: relative;
   user-select: none;
+  --grow: 0px;
 
   ${ControlsWrapper} {
     transition: opacity 0.5s 0.5s;
@@ -42,6 +44,8 @@ const RoomWrapper = styled.div`
   }
 
   &:hover {
+    --grow: ${HOVER_GROW}px;
+
     ${ControlsWrapper} {
       transition: opacity 0.25s;
       opacity: 1;
@@ -49,11 +53,24 @@ const RoomWrapper = styled.div`
   }
 `
 
+// Visible row (background, image, backdrop). It grows by --grow on hover without moving the layout.
+const RowSurface = styled.div`
+  position: absolute;
+  inset: calc(-1 * var(--grow));
+  border-radius: calc(${({$isSpacer}) => $isSpacer ? CHANNEL_HEIGHT / 2 : 10}px + var(--grow));
+  background-color: ${ROW_BG};
+  overflow: hidden;
+
+  ${RoomWrapper}:hover & {
+    box-shadow: 0 0 0 1px ${HOVER_OUTLINE};
+  }
+`
+
 // TS6 draws the banner 1:1, vertically centered in the row, anchored IMAGE_LEFT_HIDDEN px left of the depth-0 row.
 // The right-edge fade belongs to the image (500 px), not to the row.
 const Image = styled.img`
   position: absolute;
-  left: ${({$left}) => $left}px;
+  left: calc(${({$left}) => $left}px + var(--grow));
   top: 50%;
   transform: translateY(-50%);
   width: ${CHANNEL_BANNER_WIDTH}px;
@@ -72,7 +89,7 @@ const ImageMask = styled.div`
   width: ${({$isSpacer}) => $isSpacer ? '100%' : `${NAME_BACKDROP_WIDTH}px`};
   background: ${({$isSpacer}) => $isSpacer
     ? 'linear-gradient(to right, transparent 0%, rgba(27, 27, 31, 0.85) 50%, transparent 100%)'
-    : `linear-gradient(to right, ${NAME_BACKDROP} 0 60%, transparent 100%)`};
+    : `linear-gradient(to right, transparent 0, ${NAME_BACKDROP} ${NAME_BACKDROP_FADE_IN}px 60%, transparent 100%)`};
 `
 
 const RoomContent = styled.div`
@@ -122,7 +139,8 @@ const ExpandButton = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: ${({$collapsed}) => $collapsed ? COLLAPSED_CHEVRON : 'white'};
+  cursor: pointer;
   z-index: 1;
 `
 
@@ -145,6 +163,8 @@ const StyledRoomButton = styled(RoomButton)`
  * @param image Background image of the room (URL)
  * @param isSpacer If set room will render as spacer
  * @param hasChildren If set the expand button is rendered (next room is nested in this one)
+ * @param collapsed If set the sub-channels are hidden and the expand button shows the collapsed arrow
+ * @param onToggleCollapse Callback when the expand button is clicked
  * @param setIsSpacer Callback when Spacer toggle is clicked
  * @param onDepthUp Callback when depth down is clicked
  * @param onDepthDown Callback when depth up is clicked
@@ -154,18 +174,22 @@ const StyledRoomButton = styled(RoomButton)`
  * @return {JSX.Element}
  * @constructor
  */
-const Room = ({name, image, isSpacer, hasChildren, setIsSpacer, onDepthUp, onDepthDown, depth, maxDepth, ...other}) => {
+const Room = ({name, image, isSpacer, hasChildren, collapsed, onToggleCollapse, setIsSpacer, onDepthUp, onDepthDown, depth, maxDepth, ...other}) => {
     const depthOffset = depth * CHANNEL_DEPTH_OFFSET;
 
     return (
         <RoomWrapper $isSpacer={isSpacer} $depthOffset={depthOffset} {...other}>
-            {image && <Image src={image} alt="Banner Fragment" $left={-(IMAGE_LEFT_HIDDEN + depthOffset)}/>}
-            {image && <ImageMask $isSpacer={isSpacer}/>}
+            <RowSurface $isSpacer={isSpacer}>
+                {image && <Image src={image} alt="Banner Fragment" $left={-(IMAGE_LEFT_HIDDEN + depthOffset)}/>}
+                {image && <ImageMask $isSpacer={isSpacer}/>}
+            </RowSurface>
             <RoomContent>
                 {!isSpacer && <RoomIcon src={`roomIcon.svg`} alt={'Channel Icon'}/>}
                 {isSpacer ? <SpacerTitle>{name}</SpacerTitle> : <RoomTitle>{name}</RoomTitle>}
             </RoomContent>
-            {hasChildren && <ExpandButton><Icon icon={'chevron-down'} iconSize={12}/></ExpandButton>}
+            {hasChildren && <ExpandButton $collapsed={collapsed} onClick={onToggleCollapse}>
+                <Icon icon={collapsed ? 'chevron-left' : 'chevron-down'} iconSize={12}/>
+            </ExpandButton>}
             <ControlsWrapper $hasChevron={hasChildren}>
                 {depth === 0 && <StyledRoomButton onClick={setIsSpacer}>{isSpacer ? 'channel' : 'spacer'}</StyledRoomButton>}
                 {!isSpacer && <>

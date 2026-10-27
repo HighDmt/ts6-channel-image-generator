@@ -84,7 +84,7 @@ const Options = () => {
         if (options.yOffset < 0) {
             setOption('yOffset', 0);
         }
-    }, [options.slices, options.ignoreSpacing, maxChannels]);
+    }, [options.slices, options.ignoreSpacing, maxChannels, maxVerticalOffset]);
 
     const setOption = (optionName, value) => setOptions((opt) => ({...opt, [optionName]: value}));
 
@@ -170,6 +170,7 @@ const Options = () => {
                             max={image.width}
                             stepSize={image.width / 100}
                             labelStepSize={image.width / 5}
+                            labelPrecision={0}
                             onChange={(value) => setOption('xOffset', value)}
                             value={options.xOffset}
                             disabled={disabled}
@@ -179,6 +180,34 @@ const Options = () => {
                 </Col>
             </Row>
             <Row>
+                <Col>
+                    <FormGroup
+                        labelFor={'none'}
+                        label="Zoom"
+                        labelInfo={<>
+                            (Scales the image up or down) <Button
+                            icon={'reset'}
+                            small={true}
+                            outlined={true}
+                            onClick={() => setOption('zoom', 100)}
+                            disabled={disabled}
+                        >Reset</Button>
+                        </>}
+                        helperText="100% fits the image to the 500 px channel width. Zoom in and use the offsets to pick the part you want."
+                        disabled={disabled}
+                    >
+                        <Slider
+                            min={50}
+                            max={300}
+                            stepSize={5}
+                            labelStepSize={50}
+                            labelRenderer={(value) => `${value}%`}
+                            onChange={(value) => setOption('zoom', value)}
+                            value={options.zoom}
+                            disabled={disabled}
+                        />
+                    </FormGroup>
+                </Col>
                 <Col>
                     <FormGroup
                         label="Custom background color"

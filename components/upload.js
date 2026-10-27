@@ -148,7 +148,7 @@ const Upload = () => {
 
             setIsUrlLoading(false);
             setSourceImage({
-                data: resizedImageDataURL,
+                data: loadUrl,
                 width: metadata.width,
                 height: metadata.height,
                 name: "loaded"
