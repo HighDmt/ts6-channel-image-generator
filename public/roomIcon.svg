@@ -1,12 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 16 16" shape-rendering="geometricPrecision" fill="white" style="clip-rule: evenodd; fill-rule: evenodd; stroke-linejoin: round; stroke-miterlimit: 1.41421;">
-    <rect xmlns="http://www.w3.org/2000/svg" id="channel" x="0" y="0" width="16" height="16" style="fill:none;"></rect>
-    <clipPath xmlns="http://www.w3.org/2000/svg" id="_clip1">
-        <rect x="0" y="0" width="16" height="16"></rect>
-    </clipPath>
-    <g xmlns="http://www.w3.org/2000/svg" clip-path="url(#_clip1)">
-        <path d="M8,0L14.928,4L14.928,12L8,16L1.072,12L1.072,4L8,0Z" class="tsv-icon-channel-bg-fill" style=""></path>
-        <path d="M8,0.972L1.913,4.486L1.913,11.514L8,8L8,0.972Z" class="tsv-icon-channel-shade1-fill" style=""></path>
-        <path d="M14.087,11.514L14.087,4.486L8,0.972L8,8L14.087,11.514Z" class="tsv-icon-channel-shade2-fill" style=""></path>
-        <path d="M1.913,11.514L8,15.028L14.087,11.514L8,8L1.913,11.514Z" class="tsv-icon-channel-shade3-fill" style=""></path>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <!-- Hexagonal cube channel icon, seen slightly from below (original drawing, TS6 look-alike) -->
+    <defs>
+        <clipPath id="hex"><path d="M8.85 1.10 Q10.00 0.50 11.15 1.10 L17.79 4.53 Q18.50 4.90 18.50 5.70 L18.50 14.30 Q18.50 15.10 17.79 15.47 L11.15 18.90 Q10.00 19.50 8.85 18.90 L2.21 15.47 Q1.50 15.10 1.50 14.30 L1.50 5.70 Q1.50 4.90 2.21 4.53Z"/></clipPath>
+    </defs>
+    <!-- Faces overlap instead of only touching, so no background shows through along their edges -->
+    <g clip-path="url(#hex)">
+        <rect width="20" height="20" fill="#C9D8EB"/>
+        <rect x="10" width="10" height="20" fill="#AEC6DC"/>
+        <rect x="17.4" width="1.2" height="20" fill="#BACEE1"/>
+        <path d="M10 10.2L20 15.8V20H0V15.8Z" fill="#D4DDE7"/>
     </g>
+    <path d="M8.85 1.10 Q10.00 0.50 11.15 1.10 L17.79 4.53 Q18.50 4.90 18.50 5.70 L18.50 14.30 Q18.50 15.10 17.79 15.47 L11.15 18.90 Q10.00 19.50 8.85 18.90 L2.21 15.47 Q1.50 15.10 1.50 14.30 L1.50 5.70 Q1.50 4.90 2.21 4.53Z" fill="none" stroke="#9FA6AF" stroke-width="1"/>
 </svg>

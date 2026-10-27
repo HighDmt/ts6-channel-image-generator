@@ -39,7 +39,7 @@ export default function Home() {
     return (
         <>
             <Head>
-                <title>TS5 Channel Image Generator</title>
+                <title>TS6 Channel Image Generator</title>
                 <link rel="icon" href="favicon.png"/>
             </Head>
 
