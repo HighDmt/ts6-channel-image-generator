@@ -1,7 +1,7 @@
 # CLAUDE.md — TS6 Channel Image Generator (fork of ts5-channel-image-generator)
 
-> Handoff document for the model that will do the actual build.
-> Status: **TS6 port built, merged and live at <https://highdmt.github.io/ts6-channel-image-generator/>.** Follow-ups added after a real-server screenshot: zoom slider, working collapse arrow in the preview, left fade-in of the name backdrop (sections 4.1 and 9). Node 16 lives at `C:\Users\clemc\tools\node-v16.20.2-win-x64`, GitHub CLI at `C:\Users\clemc\tools\gh\bin\gh.exe`.
+> Project notes: TS6 measurements, design decisions and how the tool works.
+> Status: **TS6 port built and live at <https://highdmt.github.io/ts6-channel-image-generator/>.** Later additions (zoom, collapse, TS6 hover, auto-fill, fixes) are in section 9. Sections 5 and 7 are the original build plan, kept for context. Build with Node 16 (`.nvmrc`).
 
 ---
 
@@ -95,7 +95,7 @@ TeamSpeak has published **no official pixel specs**. The [6.0.0-beta1 changelog]
 **Client-drawn overlays (preview must replicate)**
 | Element | TS6 measured |
 |---|---|
-| Channel name backdrop | `#1B1B1F` (27,27,31). **Fades IN from transparent at the row's left edge to solid at ≈ 18 px** (alpha ≈ 0.055/px, measured on `ts6-calibration-a.png`), so ~10 px of image show at the left. Solid until 90 px, transparent by ≈ 150 px. **Width is fixed**: verified on a real server with "Erotic ASMR" vs "Channel 1" (both solid to 90 px); long names just run into the fade |
+| Channel name backdrop | `#1B1B1F` (27,27,31). **Fades IN from transparent at the row's left edge to solid at ≈ 18 px** (alpha ≈ 0.055/px, measured on `ts6-calibration-a.png`), so ~10 px of image show at the left. Solid until 90 px, transparent by ≈ 150 px. **Width is fixed**: verified on a real server with an 11-character name vs "Channel 1" (both solid to 90 px); long names just run into the fade |
 | Channel icon | ≈ 20 px hex-cube, light blue-white (`#C6D5E7`-ish), left edge at `row_left + 11` |
 | Channel title | regular weight, ≈ 15 px, light grey (`~#D4D4D5`), starts at `row_left + 42` |
 | Spacer name | centered in the row, **bold**, ≈ 15 px, white-ish |
