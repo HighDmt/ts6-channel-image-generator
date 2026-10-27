@@ -102,7 +102,7 @@ TeamSpeak has published **no official pixel specs**. The [6.0.0-beta1 changelog]
 | Spacer backdrop | horizontal gradient centered on the row: peak ≈ 85 % dark (`#1B1B1F`) at the center, falling ~linearly to 0 % at the row's left/right ends |
 | Expand/collapse button (only rows with children) | dark rounded rect **22 × 16 px**, radius ≈ 4–5, bg ≈ `rgba(27,24,36,.85)`, right edge ≈ **4 px inside the row's right edge**, vertically centered. Glyph: white **chevron-down** when expanded; blue **chevron-left** when collapsed |
 | Row base bg (no image) | `#282A2C` (40,42,44) |
-| Panel bg | `#323236` (50,50,54) (slight vignette in the client) |
+| Panel bg | `#374056` (55,64,86), the default TS6 theme (sampled from a real-server screenshot; an earlier capture showed `#323236`) |
 
 Not needed for the tool: user rows (circular ~30 px avatar, blue name), selected outline.
 
@@ -138,7 +138,7 @@ Spacer backdrop   absolute, full width,
 Icon           20 px, left 11 ; Title left 42, 15px, #D4D4D5 ; Spacer title centered, bold
 Chevron btn    22x16, radius 5, right 4, centered, bg rgba(27,24,36,.85), chevron-down white
                (render only when next room has greater depth)
-Panel          #323236
+Panel          #374056
 ```
 In the preview the source image is the **resized 500-wide** image; each row's visible portion = slice y-range centered in the row. Easiest: keep rendering the exported slice (500 × 44) via an `<img>` centered vertically in the 30 px row — exactly what TS6 does — and apply the left clip/shift above.
 

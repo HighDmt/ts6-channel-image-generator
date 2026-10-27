@@ -30,7 +30,7 @@ const AreaPreview = styled.div`
   grid-column-end: 3;
   grid-row-start: 1;
   grid-row-end: 2;
-  background-color: #323236;
+  background-color: #374056; // TS6 default channel panel color (sampled)
   padding: 1rem;
   overflow: auto;
 `
