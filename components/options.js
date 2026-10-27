@@ -67,7 +67,12 @@ const Options = () => {
     const {options, setOptions, image, rooms} = useContext(ImageManipulationContext);
 
     const maxChannels = getSlicesCount(image.width, image.height, rooms, options.ignoreSpacing);
-    const maxVerticalOffset = ~~(image.height - getRoomsHeight(image.width, image.height, rooms, options.ignoreSpacing, options.slices));
+    const roomsHeight = getRoomsHeight(image.width, image.height, rooms, options.ignoreSpacing, options.slices);
+    // Between 0 and coveredOffset the image covers every channel. Beyond that (up to the image moving fully out of
+    // the channels) the empty part shows the background color, or the auto-fill.
+    const coveredOffset = Math.max(0, ~~(image.height - roomsHeight));
+    const minVerticalOffset = -roomsHeight;
+    const maxVerticalOffset = image.height;
 
     const disabled = image.data == null;
 
@@ -77,14 +82,10 @@ const Options = () => {
             setOption('slices', maxChannels);
         }
 
-        if (options.yOffset > maxVerticalOffset) {
-            setOption('yOffset', clamp(options.yOffset, 0, maxVerticalOffset));
+        if (options.yOffset > maxVerticalOffset || options.yOffset < minVerticalOffset) {
+            setOption('yOffset', clamp(options.yOffset, minVerticalOffset, maxVerticalOffset));
         }
-
-        if (options.yOffset < 0) {
-            setOption('yOffset', 0);
-        }
-    }, [options.slices, options.ignoreSpacing, maxChannels, maxVerticalOffset]);
+    }, [options.slices, options.ignoreSpacing, maxChannels, minVerticalOffset, maxVerticalOffset]);
 
     const setOption = (optionName, value) => setOptions((opt) => ({...opt, [optionName]: value}));
 
@@ -131,19 +132,31 @@ const Options = () => {
             <Row>
                 <Col>
                     <FormGroup
+                        labelFor={'none'}
                         label="Vertical offset"
-                        labelInfo={"(Moves image up and down)"}
-                        helperText="Chose position of the image. You can get more freedom by setting lower number of channels"
-                        disabled={disabled || maxVerticalOffset === 0}
+                        labelInfo={<>
+                            (Moves image up and down) <Button
+                            icon={'reset'}
+                            small={true}
+                            outlined={true}
+                            onClick={() => setOption('yOffset', 0)}
+                            disabled={disabled}
+                        >Reset</Button>
+                        </>}
+                        helperText={<>Position of the image. From 0 to {coveredOffset} the image covers every
+                            channel; past that the empty part shows the background color, or turn on Auto-fill.</>}
+                        disabled={disabled}
                     >
                         <Slider
-                            min={0}
-                            max={Math.max(1, maxVerticalOffset)}
+                            showTrackFill={options.yOffset !== 0}
+                            min={minVerticalOffset}
+                            max={Math.max(minVerticalOffset + 1, maxVerticalOffset)}
                             stepSize={1}
-                            labelStepSize={Math.max(1, ~~(maxVerticalOffset / 10))}
+                            labelStepSize={Math.max(1, ~~((maxVerticalOffset - minVerticalOffset) / 5))}
+                            labelPrecision={0}
                             onChange={(value) => setOption('yOffset', value)}
                             value={options.yOffset}
-                            disabled={disabled || maxVerticalOffset === 0}
+                            disabled={disabled}
                         />
                     </FormGroup>
                 </Col>
@@ -254,7 +267,7 @@ const Options = () => {
                     <FormGroup
                         label="Auto-fill empty space"
                         labelInfo={"(when the image doesn't cover the channel)"}
-                        helperText="Fills the gap left by the horizontal offset or by zooming out, by stretching and blurring the edge of the image"
+                        helperText="Fills the gap left by the offsets or by zooming out, by stretching and blurring the edges of the image"
                         disabled={disabled}
                     >
                         <Switch
