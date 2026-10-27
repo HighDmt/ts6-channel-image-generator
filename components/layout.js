@@ -56,8 +56,8 @@ const CursorStyle = createGlobalStyle`
 `
 
 const Layout = ({main, preview, description}) => {
-    // 494 px rows (TS6 default) + 2rem padding + scrollbar
-    const [previewWidth, setPreviewWidth] = useState(531);
+    // 494 px rows (TS6 default) + 2rem padding + 2 * 3 px hover room + scrollbar
+    const [previewWidth, setPreviewWidth] = useState(537);
     const [isResizing, setIsResizing] = useState(false);
     const [showCursor, setShowCursor] = useState(false);
 

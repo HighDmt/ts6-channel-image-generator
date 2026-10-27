@@ -21,6 +21,7 @@ const ScrollWrapper = styled.div`
   position: relative;
   height: calc(100% - 140px);
   overflow: auto;
+  padding: 3px; // Room for the 2 px hover grow + 1 px outline, which would otherwise be clipped
 `
 
 const Preview = () => {

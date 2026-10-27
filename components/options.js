@@ -249,6 +249,24 @@ const Options = () => {
                     </FormGroup>
                 </Col>
             </Row>
+            <Row>
+                <Col>
+                    <FormGroup
+                        label="Auto-fill empty space"
+                        labelInfo={"(when the image doesn't cover the channel)"}
+                        helperText="Fills the gap left by the horizontal offset or by zooming out, by stretching and blurring the edge of the image"
+                        disabled={disabled}
+                    >
+                        <Switch
+                            checked={options.autoFill}
+                            label="Auto-fill"
+                            onChange={() => setOption('autoFill', !options.autoFill)}
+                            disabled={disabled}
+                            large={true}
+                        />
+                    </FormGroup>
+                </Col>
+            </Row>
         </OptionsStep>
     );
 };
