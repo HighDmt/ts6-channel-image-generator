@@ -98,6 +98,7 @@ const getImage = async (url) => {
 const FILL_DEPTH = 160;
 const FILL_MAX_BLUR = 48;   // Vertical blur radius reached at FILL_DEPTH px from the edge
 const FILL_EDGE_COLUMNS = 3; // Edge columns averaged together, so one noisy pixel column doesn't streak
+const FILL_SEAM_OVERLAP = 2; // px of fill drawn under the image edge, so the seam is always fully covered
 
 /**
  * Builds the auto-fill strip for one side of the image: the edge pixels stretched outwards, blurred vertically
@@ -187,20 +188,27 @@ const drawEdgeFill = (ctx, fill, imageWidth, x, y, height, channelHeight) => {
     if (x < 0) {
         const imageStart = -x;
         const near = Math.min(imageStart, FILL_DEPTH);
-        ctx.drawImage(fill.left, FILL_DEPTH - near, y, near, height, imageStart - near, 0, near, channelHeight);
-        if (imageStart > near) {
-            ctx.drawImage(fill.left, 0, y, 1, height, 0, 0, imageStart - near, channelHeight);
+        const farEnd = imageStart - near;
+        if (farEnd > 0) {
+            // Drawn first and a bit wider, so it also sits under the strip's partly covered first column
+            ctx.drawImage(fill.left, 0, y, 1, height, 0, 0, Math.ceil(farEnd) + FILL_SEAM_OVERLAP, channelHeight);
         }
+        ctx.drawImage(fill.left, FILL_DEPTH - near, y, near, height, farEnd, 0, near, channelHeight);
+        // Slide the edge color under the image's first pixels: when the edge falls between two pixels, fill and
+        // image would each only partly cover that column and leave a faint dark line
+        ctx.drawImage(fill.left, FILL_DEPTH - 1, y, 1, height, Math.floor(imageStart), 0, FILL_SEAM_OVERLAP, channelHeight);
     }
 
     // Empty space on the right: the image ends at output x = imageWidth - x
     const imageEnd = imageWidth - x;
     if (imageEnd < CHANNEL_BANNER_WIDTH) {
-        ctx.drawImage(fill.right, 0, y, FILL_DEPTH, height, imageEnd, 0, FILL_DEPTH, channelHeight);
         const farStart = imageEnd + FILL_DEPTH;
         if (farStart < CHANNEL_BANNER_WIDTH) {
-            ctx.drawImage(fill.right, FILL_DEPTH - 1, y, 1, height, farStart, 0, CHANNEL_BANNER_WIDTH - farStart, channelHeight);
+            const from = Math.floor(farStart) - FILL_SEAM_OVERLAP;
+            ctx.drawImage(fill.right, FILL_DEPTH - 1, y, 1, height, from, 0, CHANNEL_BANNER_WIDTH - from, channelHeight);
         }
+        ctx.drawImage(fill.right, 0, y, FILL_DEPTH, height, imageEnd, 0, FILL_DEPTH, channelHeight);
+        ctx.drawImage(fill.right, 0, y, 1, height, Math.ceil(imageEnd) - FILL_SEAM_OVERLAP, 0, FILL_SEAM_OVERLAP, channelHeight);
     }
 }
 
