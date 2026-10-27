@@ -56,7 +56,7 @@ const Export = () => {
 
         setExportProgress(0.8);
 
-        saveAs(blob, `ts5_channel_banner_${sourceImage.name}.zip`)
+        saveAs(blob, `ts6_channel_banner_${sourceImage.name}.zip`)
 
         setExportProgress(1);
         setExportTimeDelta(Date.now() - start);

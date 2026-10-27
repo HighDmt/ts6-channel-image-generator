@@ -1,7 +1,14 @@
 import React, {useContext, useEffect} from 'react';
 import Step from "./step";
-import {getRoomsHeight, getSlicesCount, ImageManipulationContext} from "./imageManipulation";
-import {Button, ButtonGroup, FormGroup, Icon, Slider, Switch} from "@blueprintjs/core";
+import {
+    CHANNEL_DEPTH_OFFSET,
+    getRoomsHeight,
+    getSlicesCount,
+    IMAGE_LEFT_HIDDEN,
+    ImageManipulationContext,
+    TS_IMAGE_SCALE
+} from "./imageManipulation";
+import {Button, ButtonGroup, FormGroup, Slider, Switch} from "@blueprintjs/core";
 import {Popover2} from "@blueprintjs/popover2";
 import '@blueprintjs/popover2/lib/css/blueprint-popover2.css';
 import styled from 'styled-components';
@@ -35,12 +42,6 @@ const ColorPreview = styled.div`
   border: 1px solid #fafafa;
 `
 
-const HelpPopover = styled(Popover2)`
-  .bp3-popover2-content {
-    background-color: #2b3346 !important;
-  }
-`
-
 const ColorPicker = styled(ChromePicker)`
   * {
     color: white !important;
@@ -67,7 +68,12 @@ const Options = () => {
     const {options, setOptions, image, rooms} = useContext(ImageManipulationContext);
 
     const maxChannels = getSlicesCount(image.width, image.height, rooms, options.ignoreSpacing);
-    const maxVerticalOffset = ~~(image.height - getRoomsHeight(image.width, image.height, rooms, options.ignoreSpacing, options.slices));
+    const roomsHeight = getRoomsHeight(image.width, image.height, rooms, options.ignoreSpacing, options.slices);
+    // Between 0 and coveredOffset the image covers every channel. Beyond that (up to the image moving fully out of
+    // the channels) the empty part shows the background color, or the auto-fill.
+    const coveredOffset = Math.max(0, ~~(image.height - roomsHeight));
+    const minVerticalOffset = -roomsHeight;
+    const maxVerticalOffset = image.height;
 
     const disabled = image.data == null;
 
@@ -77,14 +83,10 @@ const Options = () => {
             setOption('slices', maxChannels);
         }
 
-        if (options.yOffset > maxVerticalOffset) {
-            setOption('yOffset', clamp(options.yOffset, 0, maxVerticalOffset));
+        if (options.yOffset > maxVerticalOffset || options.yOffset < minVerticalOffset) {
+            setOption('yOffset', clamp(options.yOffset, minVerticalOffset, maxVerticalOffset));
         }
-
-        if (options.yOffset < 0) {
-            setOption('yOffset', 0);
-        }
-    }, [options.slices, options.ignoreSpacing, maxChannels]);
+    }, [options.slices, options.ignoreSpacing, maxChannels, minVerticalOffset, maxVerticalOffset]);
 
     const setOption = (optionName, value) => setOptions((opt) => ({...opt, [optionName]: value}));
 
@@ -131,19 +133,31 @@ const Options = () => {
             <Row>
                 <Col>
                     <FormGroup
+                        labelFor={'none'}
                         label="Vertical offset"
-                        labelInfo={"(Moves image up and down)"}
-                        helperText="Chose position of the image. You can get more freedom by setting lower number of channels"
-                        disabled={disabled || maxVerticalOffset === 0}
+                        labelInfo={<>
+                            (Moves image up and down) <Button
+                            icon={'reset'}
+                            small={true}
+                            outlined={true}
+                            onClick={() => setOption('yOffset', 0)}
+                            disabled={disabled}
+                        >Reset</Button>
+                        </>}
+                        helperText={<>Position of the image. From 0 to {coveredOffset} the image covers every
+                            channel; past that the empty part shows the background color, or turn on Auto-fill.</>}
+                        disabled={disabled}
                     >
                         <Slider
-                            min={0}
-                            max={Math.max(1, maxVerticalOffset)}
+                            showTrackFill={options.yOffset !== 0}
+                            min={minVerticalOffset}
+                            max={Math.max(minVerticalOffset + 1, maxVerticalOffset)}
                             stepSize={1}
-                            labelStepSize={Math.max(1, ~~(maxVerticalOffset / 10))}
+                            labelStepSize={Math.max(1, ~~((maxVerticalOffset - minVerticalOffset) / 5))}
+                            labelPrecision={0}
                             onChange={(value) => setOption('yOffset', value)}
                             value={options.yOffset}
-                            disabled={disabled || maxVerticalOffset === 0}
+                            disabled={disabled}
                         />
                     </FormGroup>
                 </Col>
@@ -159,7 +173,9 @@ const Options = () => {
                             onClick={() => setOption('xOffset', 0)}
                         >Reset</Button>
                         </>}
-                        helperText="Horizontal offset of the image. Primarily useful for images with transparent background."
+                        helperText={<>Horizontal offset of the image. Primarily useful for images with transparent
+                            background.<br/>Leftmost {IMAGE_LEFT_HIDDEN} px (+{Math.round(CHANNEL_DEPTH_OFFSET / TS_IMAGE_SCALE)} px per
+                            nested level) of the image are hidden by TeamSpeak 6.</>}
                         disabled={disabled}
                     >
                         <Slider
@@ -168,6 +184,7 @@ const Options = () => {
                             max={image.width}
                             stepSize={image.width / 100}
                             labelStepSize={image.width / 5}
+                            labelPrecision={0}
                             onChange={(value) => setOption('xOffset', value)}
                             value={options.xOffset}
                             disabled={disabled}
@@ -179,37 +196,29 @@ const Options = () => {
             <Row>
                 <Col>
                     <FormGroup
-                        label="Fit mode"
-                        labelInfo={"(behavior of image when stretch over nested channels)"}
-                        helperText="If cover mode is used image will be stretch over nested channels. Otherwise it will be aligned to left with fixed width"
-                        disabled={disabled}
                         labelFor={'none'}
-                    >
-                        <Switch
-                            innerLabel={'Contain'}
-                            innerLabelChecked={'Cover'}
-                            checked={options.coverFitMode}
-                            label={<>
-                                Image Fit Mode <HelpPopover
-                                disabled={disabled}
-                                placement="right"
-                                interactionKind={'hover'}
-                                usePortal={false}
-                                content={
-                                    <img
-                                        src={'coverContainExplanation.png'}
-                                        alt={'Cover/Contain explanation'}
-                                        style={{width: 350}}
-                                    />
-                                }
-                            >
-                                <Icon icon={'info-sign'}/>
-                            </HelpPopover>
-
-                            </>}
-                            onChange={() => setOption('coverFitMode', !options.coverFitMode)}
+                        label="Zoom"
+                        labelInfo={<>
+                            (Scales the image up or down) <Button
+                            icon={'reset'}
+                            small={true}
+                            outlined={true}
+                            onClick={() => setOption('zoom', 100)}
                             disabled={disabled}
-                            large={true}
+                        >Reset</Button>
+                        </>}
+                        helperText="100% fits the image to the 500 px export width (TeamSpeak 6 shows it at 11/12 size). Zoom in and use the offsets to pick the part you want."
+                        disabled={disabled}
+                    >
+                        <Slider
+                            min={50}
+                            max={300}
+                            stepSize={5}
+                            labelStepSize={50}
+                            labelRenderer={(value) => `${value}%`}
+                            onChange={(value) => setOption('zoom', value)}
+                            value={options.zoom}
+                            disabled={disabled}
                         />
                     </FormGroup>
                 </Col>
@@ -251,6 +260,24 @@ const Options = () => {
                                 }}
                             />
                         </ButtonGroup>
+                    </FormGroup>
+                </Col>
+            </Row>
+            <Row>
+                <Col>
+                    <FormGroup
+                        label="Auto-fill empty space"
+                        labelInfo={"(when the image doesn't cover the channel)"}
+                        helperText="Fills the gap left by the offsets or by zooming out, by stretching and blurring the edges of the image"
+                        disabled={disabled}
+                    >
+                        <Switch
+                            checked={options.autoFill}
+                            label="Auto-fill"
+                            onChange={() => setOption('autoFill', !options.autoFill)}
+                            disabled={disabled}
+                            large={true}
+                        />
                     </FormGroup>
                 </Col>
             </Row>

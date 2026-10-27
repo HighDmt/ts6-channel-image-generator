@@ -1,4 +1,4 @@
-import React, {useContext, useState} from 'react';
+import React, {useContext, useEffect, useState} from 'react';
 import Step from "./step";
 import {Button, Callout, Code, FileInput, FormGroup, Icon, InputGroup} from "@blueprintjs/core";
 import styled from 'styled-components';
@@ -44,6 +44,50 @@ const FileSupportCallout = styled(Callout)`
 
 const LoadButton = styled(Button)`
   width: 85px;
+`
+
+// Full-window overlay shown while a file is dragged over the page. pointer-events: none so the drag events keep
+// reaching the page underneath (the drop is handled on window).
+const DropOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(15, 20, 32, 0.8);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  opacity: ${({$visible}) => $visible ? 1 : 0};
+  transition: opacity 0.15s;
+`
+
+const DropBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: min(480px, 100%);
+  padding: 3rem 2rem;
+  border: 3px dashed rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  background: rgba(28, 37, 56, 0.9);
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: center;
+
+  small {
+    font-size: 0.9rem;
+    font-weight: 400;
+    opacity: 0.7;
+  }
+`
+
+const ImageActions = styled.div`
+  margin-top: 0.5rem;
+  width: 300px;
 `
 
 /**
@@ -101,20 +145,24 @@ export const getImageMetadataFromDataURL = (url) => {
 
 
 const Upload = () => {
-    const {sourceImage, setSourceImage} = useContext(ImageManipulationContext);
+    const {sourceImage, setSourceImage, resetProject} = useContext(ImageManipulationContext);
     const [loadUrl, setLoadUrl] = useState("");
     const [isUrlLoading, setIsUrlLoading] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
 
     /**
-     * Handles uploading of the image using file input form
+     * Loads an image file (from the file input, a drop or a paste)
      *
-     * @param e Input change event
+     * @param file File blob
      * @return {Promise<void>}
      */
-    const uploadHandler = async (e) => {
-        const file = e.target.files[0];
-
+    const loadFile = async (file) => {
         if (file == null) return;
+
+        if (!file.type.startsWith('image/')) {
+            toaster.show({intent: "danger", message: "That file is not an image.", icon: "error"});
+            return;
+        }
 
         const dataURL = await fileToDataURL(file);
 
@@ -127,6 +175,61 @@ const Upload = () => {
             name: file.name
         })
     }
+
+    /**
+     * Handles uploading of the image using file input form
+     *
+     * @param e Input change event
+     */
+    const uploadHandler = (e) => loadFile(e.target.files[0]);
+
+    // Drag and drop anywhere on the page, and Ctrl+V of a copied image
+    useEffect(() => {
+        let enterCount = 0; // dragenter/dragleave fire for every element crossed, so count them
+        const hasFiles = (e) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+
+        const onDragEnter = (e) => {
+            if (!hasFiles(e)) return;
+            enterCount++;
+            setIsDragging(true);
+        };
+        const onDragLeave = (e) => {
+            if (!hasFiles(e)) return;
+            enterCount = Math.max(0, enterCount - 1);
+            if (enterCount === 0) setIsDragging(false);
+        };
+        const onDragOver = (e) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault(); // Allows the drop
+            e.dataTransfer.dropEffect = 'copy';
+        };
+        const onDrop = (e) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault(); // Stops the browser from opening the image
+            enterCount = 0;
+            setIsDragging(false);
+            loadFile(e.dataTransfer.files[0]);
+        };
+        const onPaste = (e) => {
+            const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
+            if (file == null) return; // Plain text paste (e.g. into the URL field) works as usual
+            e.preventDefault();
+            loadFile(file);
+        };
+
+        window.addEventListener('dragenter', onDragEnter);
+        window.addEventListener('dragleave', onDragLeave);
+        window.addEventListener('dragover', onDragOver);
+        window.addEventListener('drop', onDrop);
+        window.addEventListener('paste', onPaste);
+        return () => {
+            window.removeEventListener('dragenter', onDragEnter);
+            window.removeEventListener('dragleave', onDragLeave);
+            window.removeEventListener('dragover', onDragOver);
+            window.removeEventListener('drop', onDrop);
+            window.removeEventListener('paste', onPaste);
+        };
+    }, []);
 
     /**
      * Handles loading of image from the given URL
@@ -148,7 +251,7 @@ const Upload = () => {
 
             setIsUrlLoading(false);
             setSourceImage({
-                data: resizedImageDataURL,
+                data: loadUrl,
                 width: metadata.width,
                 height: metadata.height,
                 name: "loaded"
@@ -184,19 +287,28 @@ const Upload = () => {
 
     return (
         <UploadStep number={1}>
+            <DropOverlay $visible={isDragging} aria-hidden={!isDragging}>
+                <DropBox>
+                    <Icon icon={"cloud-upload"} iconSize={56}/>
+                    Drop image to upload
+                    <small>It stays on your computer, nothing is sent anywhere</small>
+                </DropBox>
+            </DropOverlay>
             <Col $width={'calc(100% - 350px)'}>
                 <FileSupportCallout intent={"primary"} title={"Supported image formats"}>
                     Image formats that are supported depends on your browser but in general all modern image formats
                     should work fine.
                     Animated banners are not yet supported and they will be converted to static one.
-                    Output images are in resolution <Code>500x22</Code> pixels so optimal size for the input image is
-                    width <Code>500px</Code> and height that can be divided evenly.
+                    Output images are in resolution <Code>500x48</Code> pixels (TeamSpeak 6 shows them at 11/12 size, so
+                    48 px fill one 44 px row step) so optimal size for the input image is width <Code>500px</Code> and
+                    height that can be divided evenly.
                 </FileSupportCallout>
                 <Col $width={'50%'}>
                     <FormGroup
                         label="Image File"
-                        helperText={<>Upload image that you would like to convert into room banners.<br/>Images are not
-                            uploaded to the server and all processing is done in the browser.</>}
+                        helperText={<>Choose, drag and drop, or paste (Ctrl+V) the image you would like to convert into
+                            channel banners.<br/>Images are not uploaded to a server and all processing is done in the
+                            browser.</>}
                         labelFor="file-input"
                         labelInfo="(Upload from your computer)"
                     >
@@ -247,6 +359,15 @@ const Upload = () => {
                             <Icon icon={"media"} iconSize={50}/>
                         </ImagePreviewPlaceholder>
                 }
+                {sourceImage.data && <ImageActions>
+                    <Button
+                        icon={'trash'}
+                        outlined={true}
+                        fill={true}
+                        onClick={resetProject}
+                        title={'Removes the image and resets all settings, including the copy saved in this browser'}
+                    >Start over</Button>
+                </ImageActions>}
             </Col>
         </UploadStep>
     );

@@ -30,7 +30,7 @@ const AreaPreview = styled.div`
   grid-column-end: 3;
   grid-row-start: 1;
   grid-row-end: 2;
-  background-color: #2b3346;
+  background-color: #374056; // TS6 default channel panel color (sampled)
   padding: 1rem;
   overflow: auto;
 `
@@ -56,7 +56,8 @@ const CursorStyle = createGlobalStyle`
 `
 
 const Layout = ({main, preview, description}) => {
-    const [previewWidth, setPreviewWidth] = useState(586);
+    // 494 px rows (TS6 default) + 2rem padding + 2 * 3 px hover room + scrollbar
+    const [previewWidth, setPreviewWidth] = useState(537);
     const [isResizing, setIsResizing] = useState(false);
     const [showCursor, setShowCursor] = useState(false);
 
