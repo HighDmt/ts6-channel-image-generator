@@ -20,12 +20,26 @@ Just click [here to use the app](https://highdmt.github.io/ts6-channel-image-gen
 
 ## 📐 TeamSpeak 6 geometry
 
-- Every channel and spacer row is 30 px tall with a 14 px gap, so each exported image is **500 × 44 px**
-  (TS6 shows its middle 30 px). With *Ignore spacing* on, images are **500 × 30 px**.
-- Images are drawn 1:1. Anything wider than 500 px is scaled down by TeamSpeak, so always use the exported 500 px images.
-- The leftmost 10 px of the image (+10 px per nested level) are hidden behind the row edge.
+- Every channel and spacer row is 30 px tall with a 14 px gap (44 px from one row to the next).
+- TeamSpeak 6 (tested on 6.0.0-beta5) draws channel images at **11/12 of their size**, so each exported image is
+  **500 × 48 px**: it shows up 44 px tall, exactly one row step, and the picture continues seamlessly from row to row.
+  With *Ignore spacing* on, images are **500 × 33 px**.
+- Anything wider than 500 px is first shrunk to 500 px by TeamSpeak, so 500 px is the maximum useful width
+  (a 500 px image ends up about 458 px wide on screen).
+- The leftmost 10 px of the image (+ about 11 px per nested level) are hidden behind the row edge.
+- The image mode in the channel settings ("Do not adjust" / "Keep aspect ratio") makes no difference for 500 px images.
+- Images made with older versions of this tool (500 × 44 px) repeat about 3 px at each seam in TS6. Export them again.
 
 Measurements and calibration screenshots are in [`docs/`](docs/) and [`CLAUDE.md`](CLAUDE.md).
+
+## 💡 Tips
+
+- **Single-channel banners:** a row shows about 33 px from the vertical middle of a 500 px wide image. Keep logos or
+  text inside that strip.
+- **Preview colors look a bit different from TeamSpeak?** Browsers adjust colors to your monitor's color profile,
+  TeamSpeak doesn't. With a non-standard profile the preview looks slightly off even though the colors are identical.
+  To make them match, set `chrome://flags/#force-color-profile` (or `edge://flags/#force-color-profile`) to **sRGB**.
+- **Comparing screenshots:** take them with Windows HDR off. HDR changes the colors in screenshots.
 
 ## ⚙️ How it works
 

@@ -5,7 +5,8 @@ import {
     getRoomsHeight,
     getSlicesCount,
     IMAGE_LEFT_HIDDEN,
-    ImageManipulationContext
+    ImageManipulationContext,
+    TS_IMAGE_SCALE
 } from "./imageManipulation";
 import {Button, ButtonGroup, FormGroup, Slider, Switch} from "@blueprintjs/core";
 import {Popover2} from "@blueprintjs/popover2";
@@ -173,8 +174,8 @@ const Options = () => {
                         >Reset</Button>
                         </>}
                         helperText={<>Horizontal offset of the image. Primarily useful for images with transparent
-                            background.<br/>Leftmost {IMAGE_LEFT_HIDDEN} px (+{CHANNEL_DEPTH_OFFSET} px per nested
-                            level) of the image are hidden by TeamSpeak 6.</>}
+                            background.<br/>Leftmost {IMAGE_LEFT_HIDDEN} px (+{Math.round(CHANNEL_DEPTH_OFFSET / TS_IMAGE_SCALE)} px per
+                            nested level) of the image are hidden by TeamSpeak 6.</>}
                         disabled={disabled}
                     >
                         <Slider
@@ -206,7 +207,7 @@ const Options = () => {
                             disabled={disabled}
                         >Reset</Button>
                         </>}
-                        helperText="100% fits the image to the 500 px channel width. Zoom in and use the offsets to pick the part you want."
+                        helperText="100% fits the image to the 500 px export width (TeamSpeak 6 shows it at 11/12 size). Zoom in and use the offsets to pick the part you want."
                         disabled={disabled}
                     >
                         <Slider

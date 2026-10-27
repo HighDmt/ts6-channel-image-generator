@@ -3,16 +3,17 @@ import {debounce, throttle} from "lodash";
 import {clearItems, loadItem, saveItem} from "./storage";
 
 // TeamSpeak 6 geometry, measured on a real TS6 client (see docs/ and CLAUDE.md section 4).
-// Every row (channel or spacer) is 30 px tall with a 14 px gap, so the row pitch is 44 px.
-// TS6 draws the banner 1:1, vertically centered in the row, so a 44 px slice shows its middle 30 px.
-export const SPACER_HEIGHT = 30;
-export const SPACER_BANNER_HEIGHT = 44;
-export const CHANNEL_HEIGHT = 30;
-export const CHANNEL_BANNER_HEIGHT = 44;
-export const CHANNEL_GAP = CHANNEL_BANNER_HEIGHT - CHANNEL_HEIGHT;
-export const CHANNEL_BANNER_WIDTH = 500;
-export const CHANNEL_DEPTH_OFFSET = 10;     // Row indent per nesting level (preview only)
-export const IMAGE_LEFT_HIDDEN = 10;        // Image x hidden at depth 0 (+ CHANNEL_DEPTH_OFFSET per level)
+// On screen every row (channel or spacer) is 30 px tall with a 14 px gap, so the row pitch is 44 px.
+// TS6 (6.0.0-beta5) draws channel images at 11/12 of their size, vertically centered in the row. A 48 px slice is
+// therefore shown 44 px tall, exactly one row pitch, so slicing in 48 px steps gives a continuous picture.
+export const TS_IMAGE_SCALE = 11 / 12;
+export const CHANNEL_HEIGHT = 30;           // Visible row height on screen
+export const CHANNEL_GAP = 14;              // Gap between rows on screen
+export const CHANNEL_BANNER_HEIGHT = 48;    // Slice height: (30 + 14) / TS_IMAGE_SCALE
+export const SPACING_IGNORED_HEIGHT = 33;   // Slice height with "ignore spacing": 30 / TS_IMAGE_SCALE, rounded
+export const CHANNEL_BANNER_WIDTH = 500;    // Slice width (TS6 shrinks wider images, so this is the maximum)
+export const CHANNEL_DEPTH_OFFSET = 10;     // Row indent per nesting level on screen (preview only)
+export const IMAGE_LEFT_HIDDEN = 10;        // Image px hidden left of the depth-0 row (more per nested level)
 
 export const defaultRoom = {depth: 0, spacer: false};
 
@@ -56,9 +57,7 @@ export const ImageManipulationContext = React.createContext(initialValue);
  * @param ignoreSpacing
  * @return {number}
  */
-const getChannelHeight = (isSpacer, ignoreSpacing) => isSpacer
-    ? ignoreSpacing ? SPACER_HEIGHT : SPACER_BANNER_HEIGHT
-    : ignoreSpacing ? CHANNEL_HEIGHT : CHANNEL_BANNER_HEIGHT
+const getChannelHeight = (isSpacer, ignoreSpacing) => ignoreSpacing ? SPACING_IGNORED_HEIGHT : CHANNEL_BANNER_HEIGHT
 
 /**
  * Creates HTML canvas of given size

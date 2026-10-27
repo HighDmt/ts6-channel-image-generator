@@ -299,8 +299,9 @@ const Upload = () => {
                     Image formats that are supported depends on your browser but in general all modern image formats
                     should work fine.
                     Animated banners are not yet supported and they will be converted to static one.
-                    Output images are in resolution <Code>500x44</Code> pixels so optimal size for the input image is
-                    width <Code>500px</Code> and height that can be divided evenly.
+                    Output images are in resolution <Code>500x48</Code> pixels (TeamSpeak 6 shows them at 11/12 size, so
+                    48 px fill one 44 px row step) so optimal size for the input image is width <Code>500px</Code> and
+                    height that can be divided evenly.
                 </FileSupportCallout>
                 <Col $width={'50%'}>
                     <FormGroup

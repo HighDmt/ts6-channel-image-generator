@@ -6,7 +6,8 @@ import {
     CHANNEL_DEPTH_OFFSET,
     CHANNEL_GAP,
     CHANNEL_HEIGHT,
-    IMAGE_LEFT_HIDDEN
+    IMAGE_LEFT_HIDDEN,
+    TS_IMAGE_SCALE
 } from "./imageManipulation";
 
 // TS6 client colors (measured from screenshots, see CLAUDE.md section 4)
@@ -14,8 +15,10 @@ const ROW_BG = '#282A2C';
 const NAME_BACKDROP = '#1B1B1F';
 const NAME_BACKDROP_WIDTH = 150;   // Fixed, does not grow with long names
 const NAME_BACKDROP_FADE_IN = 18;  // Backdrop fades in from the row's left edge, so a few px of image show
+// Spacer name backdrop, measured with docs/spacer-test: darkens only (no blur), 93 % at the center, gone ~8 % from the ends
+const SPACER_BACKDROP = 'linear-gradient(to right, transparent 8%, rgba(27, 27, 31, 0.93) 44%, rgba(27, 27, 31, 0.93) 56%, transparent 92%)';
 const COLLAPSED_CHEVRON = '#1CC9FF';
-const IMAGE_FADE_WIDTH = 84;
+const IMAGE_FADE_WIDTH = 84 * TS_IMAGE_SCALE; // Screen px; 84 image px at 1:1
 const HOVER_GROW = 2;              // On hover TS6 grows the row 2 px on every side; the image stays put
 const HOVER_OUTLINE = '#C0C0C0';
 
@@ -66,14 +69,14 @@ const RowSurface = styled.div`
   }
 `
 
-// TS6 draws the banner 1:1, vertically centered in the row, anchored IMAGE_LEFT_HIDDEN px left of the depth-0 row.
-// The right-edge fade belongs to the image (500 px), not to the row.
+// TS6 draws the banner at TS_IMAGE_SCALE, vertically centered in the row, anchored IMAGE_LEFT_HIDDEN image px left of
+// the depth-0 row. The right-edge fade belongs to the image, not to the row.
 const Image = styled.img`
   position: absolute;
   left: calc(${({$left}) => $left}px + var(--grow));
   top: 50%;
   transform: translateY(-50%);
-  width: ${CHANNEL_BANNER_WIDTH}px;
+  width: ${CHANNEL_BANNER_WIDTH * TS_IMAGE_SCALE}px;
   max-width: none;
   height: auto;
   -webkit-mask-image: linear-gradient(to right, black calc(100% - ${IMAGE_FADE_WIDTH}px), transparent 100%);
@@ -88,7 +91,7 @@ const ImageMask = styled.div`
   max-width: 100%;
   width: ${({$isSpacer}) => $isSpacer ? '100%' : `${NAME_BACKDROP_WIDTH}px`};
   background: ${({$isSpacer}) => $isSpacer
-    ? 'linear-gradient(to right, transparent 0%, rgba(27, 27, 31, 0.85) 50%, transparent 100%)'
+    ? SPACER_BACKDROP
     : `linear-gradient(to right, transparent 0, ${NAME_BACKDROP} ${NAME_BACKDROP_FADE_IN}px 60%, transparent 100%)`};
 `
 
@@ -180,7 +183,7 @@ const Room = ({name, image, isSpacer, hasChildren, collapsed, onToggleCollapse, 
     return (
         <RoomWrapper $isSpacer={isSpacer} $depthOffset={depthOffset} {...other}>
             <RowSurface $isSpacer={isSpacer}>
-                {image && <Image src={image} alt="Banner Fragment" $left={-(IMAGE_LEFT_HIDDEN + depthOffset)}/>}
+                {image && <Image src={image} alt="Banner Fragment" $left={-(IMAGE_LEFT_HIDDEN * TS_IMAGE_SCALE + depthOffset)}/>}
                 {image && <ImageMask $isSpacer={isSpacer}/>}
             </RowSurface>
             <RoomContent>
