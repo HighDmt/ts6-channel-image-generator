@@ -189,7 +189,7 @@ const Upload = () => {
                     Image formats that are supported depends on your browser but in general all modern image formats
                     should work fine.
                     Animated banners are not yet supported and they will be converted to static one.
-                    Output images are in resolution <Code>500x22</Code> pixels so optimal size for the input image is
+                    Output images are in resolution <Code>500x44</Code> pixels so optimal size for the input image is
                     width <Code>500px</Code> and height that can be divided evenly.
                 </FileSupportCallout>
                 <Col $width={'50%'}>

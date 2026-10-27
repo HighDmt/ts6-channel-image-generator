@@ -1,7 +1,13 @@
 import React, {useContext, useEffect} from 'react';
 import Step from "./step";
-import {getRoomsHeight, getSlicesCount, ImageManipulationContext} from "./imageManipulation";
-import {Button, ButtonGroup, FormGroup, Icon, Slider, Switch} from "@blueprintjs/core";
+import {
+    CHANNEL_DEPTH_OFFSET,
+    getRoomsHeight,
+    getSlicesCount,
+    IMAGE_LEFT_HIDDEN,
+    ImageManipulationContext
+} from "./imageManipulation";
+import {Button, ButtonGroup, FormGroup, Slider, Switch} from "@blueprintjs/core";
 import {Popover2} from "@blueprintjs/popover2";
 import '@blueprintjs/popover2/lib/css/blueprint-popover2.css';
 import styled from 'styled-components';
@@ -33,12 +39,6 @@ const ColorPreview = styled.div`
   width: 1.5em;
   height: 1.5em;
   border: 1px solid #fafafa;
-`
-
-const HelpPopover = styled(Popover2)`
-  .bp3-popover2-content {
-    background-color: #2b3346 !important;
-  }
 `
 
 const ColorPicker = styled(ChromePicker)`
@@ -159,7 +159,9 @@ const Options = () => {
                             onClick={() => setOption('xOffset', 0)}
                         >Reset</Button>
                         </>}
-                        helperText="Horizontal offset of the image. Primarily useful for images with transparent background."
+                        helperText={<>Horizontal offset of the image. Primarily useful for images with transparent
+                            background.<br/>Leftmost {IMAGE_LEFT_HIDDEN} px (+{CHANNEL_DEPTH_OFFSET} px per nested
+                            level) of the image are hidden by TeamSpeak 6.</>}
                         disabled={disabled}
                     >
                         <Slider
@@ -177,42 +179,6 @@ const Options = () => {
                 </Col>
             </Row>
             <Row>
-                <Col>
-                    <FormGroup
-                        label="Fit mode"
-                        labelInfo={"(behavior of image when stretch over nested channels)"}
-                        helperText="If cover mode is used image will be stretch over nested channels. Otherwise it will be aligned to left with fixed width"
-                        disabled={disabled}
-                        labelFor={'none'}
-                    >
-                        <Switch
-                            innerLabel={'Contain'}
-                            innerLabelChecked={'Cover'}
-                            checked={options.coverFitMode}
-                            label={<>
-                                Image Fit Mode <HelpPopover
-                                disabled={disabled}
-                                placement="right"
-                                interactionKind={'hover'}
-                                usePortal={false}
-                                content={
-                                    <img
-                                        src={'coverContainExplanation.png'}
-                                        alt={'Cover/Contain explanation'}
-                                        style={{width: 350}}
-                                    />
-                                }
-                            >
-                                <Icon icon={'info-sign'}/>
-                            </HelpPopover>
-
-                            </>}
-                            onChange={() => setOption('coverFitMode', !options.coverFitMode)}
-                            disabled={disabled}
-                            large={true}
-                        />
-                    </FormGroup>
-                </Col>
                 <Col>
                     <FormGroup
                         label="Custom background color"

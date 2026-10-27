@@ -2,12 +2,17 @@ import React, {useEffect, useRef, useState} from 'react';
 import {memoize, throttle} from "lodash";
 import {getImageMetadataFromDataURL} from "./upload";
 
-export const SPACER_HEIGHT = 16;
-export const SPACER_BANNER_HEIGHT = 26;
-export const CHANNEL_HEIGHT = 22;
-export const CHANNEL_BANNER_HEIGHT = 30;
+// TeamSpeak 6 geometry, measured on a real TS6 client (see docs/ and CLAUDE.md section 4).
+// Every row (channel or spacer) is 30 px tall with a 14 px gap, so the row pitch is 44 px.
+// TS6 draws the banner 1:1, vertically centered in the row, so a 44 px slice shows its middle 30 px.
+export const SPACER_HEIGHT = 30;
+export const SPACER_BANNER_HEIGHT = 44;
+export const CHANNEL_HEIGHT = 30;
+export const CHANNEL_BANNER_HEIGHT = 44;
+export const CHANNEL_GAP = CHANNEL_BANNER_HEIGHT - CHANNEL_HEIGHT;
 export const CHANNEL_BANNER_WIDTH = 500;
-export const CHANNEL_DEPTH_OFFSET = 11;
+export const CHANNEL_DEPTH_OFFSET = 10;     // Row indent per nesting level (preview only)
+export const IMAGE_LEFT_HIDDEN = 10;        // Image x hidden at depth 0 (+ CHANNEL_DEPTH_OFFSET per level)
 
 export const defaultRoom = {depth: 0, spacer: false};
 
@@ -17,7 +22,6 @@ const initialValue = {
         yOffset: 0,
         xOffset: 0,
         ignoreSpacing: false,
-        coverFitMode: true,
         backgroundColor: '#00000000',
     },
     results: [null, null, null, null, null],  // By default show 5 rooms without image
@@ -218,13 +222,13 @@ const generateImages = (inputFile, options, canvas, image, rooms, cb) => {
     let y = 0;
     for (let i = 0; i < options.slices; i++) {
         const room = rooms[i];
-        const xOffset = room.depth * CHANNEL_DEPTH_OFFSET;
 
         const channelHeight = getChannelHeight(room.spacer, options.ignoreSpacing);
 
+        // TS6 anchors the image in screen space, not per row, so nested rows need no x shift
         result.push(getClippedRegion(
             canvas, image,
-            xOffset - options.xOffset, options.yOffset + y,
+            -options.xOffset, options.yOffset + y,
             inputFile.width, channelHeight,
             channelHeight,
             options.backgroundColor)
@@ -281,16 +285,11 @@ const ImageManipulation = ({children}) => {
                 const start = Date.now();
                 setExportStatus((c) => ({...c, start: start, end: null}));
 
-                const maxRoomDepth = rooms.reduce((acc, cur) => cur.depth > acc ? cur.depth : acc, 0);
-
-                const imageWidth = options.coverFitMode
-                    ? CHANNEL_BANNER_WIDTH + (maxRoomDepth * CHANNEL_DEPTH_OFFSET)
-                    : CHANNEL_BANNER_WIDTH
-
+                // TS6 scales anything wider than 500 px down, so slices must always be exactly 500 px wide
                 const resizedImage = await memoizedResizeImageFromDataURL(
                     sourceImage.data,
                     {width: sourceImage.width, height: sourceImage.height},
-                    imageWidth
+                    CHANNEL_BANNER_WIDTH
                 );
 
                 const resizedImageMetadata = await getImageMetadataFromDataURL(resizedImage);
@@ -306,7 +305,7 @@ const ImageManipulation = ({children}) => {
                 setExportStatus((c) => ({...c, end: end, delta: end - start}));
             }
         )();
-    }, [sourceImage, rooms, options.coverFitMode])
+    }, [sourceImage])
 
     // When inputFile or options are changed it generates new result images
     useEffect(() => {
@@ -323,7 +322,7 @@ const ImageManipulation = ({children}) => {
                 });
             }
         )();
-    }, [imageObject, options, image])
+    }, [imageObject, options, image, rooms])
 
     // When input file is changed it recalculates maxSlicesCount and resets yOffset option
     useEffect(() => {

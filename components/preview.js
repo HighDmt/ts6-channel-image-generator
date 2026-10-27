@@ -66,11 +66,13 @@ const Preview = () => {
                     if (i > 0) {
                         maxDepth = rooms[i - 1].depth + 1;
                     }
+                    const hasChildren = i + 1 < results.length && rooms[i + 1].depth > room.depth;
                     return <Room
-                        name={room.spacer ? `Spacer #${spacersIndex++}` : `Room #${roomsIndex++}`}
+                        name={room.spacer ? `Spacer #${spacersIndex++}` : `Channel #${roomsIndex++}`}
                         image={result}
                         key={i}
                         isSpacer={room.spacer}
+                        hasChildren={hasChildren}
                         depth={room.depth}
                         maxDepth={maxDepth}
                         setIsSpacer={() => updateNthRoom(i, {spacer: !room.spacer})}
@@ -82,7 +84,7 @@ const Preview = () => {
             </ScrollWrapper>
             <ResetCallout icon={'info-sign'} title={'Customize your channels structure'} intent={"primary"}>
                 You can use arrows on the right of the channel preview to make nested channels and toggle between normal
-                room and spacer.
+                channel and spacer.
                 <Button
                     icon={'reset'}
                     outlined
