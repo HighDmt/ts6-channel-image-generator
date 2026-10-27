@@ -22,6 +22,7 @@ const initialValue = {
         xOffset: 0,
         ignoreSpacing: false,
         zoom: 100, // % of the 500 px banner width the image is scaled to
+        autoFill: false, // Fill empty space beside the image with its stretched, blurred edges
         backgroundColor: '#00000000',
     },
     results: [null, null, null, null, null],  // By default show 5 rooms without image
@@ -93,6 +94,116 @@ const getImage = async (url) => {
     })
 }
 
+// Auto-fill: width of the progressively blurred strip next to the image edge (beyond it the last column repeats)
+const FILL_DEPTH = 160;
+const FILL_MAX_BLUR = 48;   // Vertical blur radius reached at FILL_DEPTH px from the edge
+const FILL_EDGE_COLUMNS = 3; // Edge columns averaged together, so one noisy pixel column doesn't streak
+
+/**
+ * Builds the auto-fill strip for one side of the image: the edge pixels stretched outwards, blurred vertically
+ * more and more the further they are from the image. Built at the scaled image size, so slices can copy from it
+ * with the same y as the image.
+ *
+ * @param img Original image
+ * @param width Scaled image width
+ * @param height Scaled image height
+ * @param side 'left' or 'right'
+ * @return {HTMLCanvasElement} FILL_DEPTH x height canvas; the edge touching the image is on the image side
+ */
+const buildEdgeFill = (img, width, height, side) => {
+    const scale = width / img.naturalWidth;
+    const sourceWidth = FILL_EDGE_COLUMNS / scale;
+
+    const edge = document.createElement('canvas');
+    edge.width = FILL_EDGE_COLUMNS;
+    edge.height = height;
+    const edgeCtx = edge.getContext('2d');
+    edgeCtx.imageSmoothingQuality = 'high';
+    edgeCtx.drawImage(
+        img,
+        side === 'left' ? 0 : img.naturalWidth - sourceWidth, 0, sourceWidth, img.naturalHeight,
+        0, 0, FILL_EDGE_COLUMNS, height
+    );
+    const px = edgeCtx.getImageData(0, 0, FILL_EDGE_COLUMNS, height).data;
+
+    // Prefix sums of alpha-weighted colors per row, so any vertical blur radius costs O(1) per pixel
+    const sumR = new Float64Array(height + 1), sumG = new Float64Array(height + 1);
+    const sumB = new Float64Array(height + 1), sumA = new Float64Array(height + 1);
+    for (let y = 0; y < height; y++) {
+        let r = 0, g = 0, b = 0, a = 0;
+        for (let k = 0; k < FILL_EDGE_COLUMNS; k++) {
+            const i = (y * FILL_EDGE_COLUMNS + k) * 4;
+            const alpha = px[i + 3];
+            r += px[i] * alpha;
+            g += px[i + 1] * alpha;
+            b += px[i + 2] * alpha;
+            a += alpha;
+        }
+        sumR[y + 1] = sumR[y] + r;
+        sumG[y + 1] = sumG[y] + g;
+        sumB[y + 1] = sumB[y] + b;
+        sumA[y + 1] = sumA[y] + a;
+    }
+
+    const fill = document.createElement('canvas');
+    fill.width = FILL_DEPTH;
+    fill.height = height;
+    const fillCtx = fill.getContext('2d');
+    const out = fillCtx.createImageData(FILL_DEPTH, height);
+
+    for (let d = 0; d < FILL_DEPTH; d++) {
+        const radius = Math.round(FILL_MAX_BLUR * d / (FILL_DEPTH - 1));
+        const x = side === 'left' ? FILL_DEPTH - 1 - d : d;
+        for (let y = 0; y < height; y++) {
+            const lo = Math.max(0, y - radius);
+            const hi = Math.min(height - 1, y + radius);
+            const a = sumA[hi + 1] - sumA[lo];
+            const i = (y * FILL_DEPTH + x) * 4;
+            if (a > 0) {
+                out.data[i] = (sumR[hi + 1] - sumR[lo]) / a;
+                out.data[i + 1] = (sumG[hi + 1] - sumG[lo]) / a;
+                out.data[i + 2] = (sumB[hi + 1] - sumB[lo]) / a;
+                out.data[i + 3] = a / ((hi - lo + 1) * FILL_EDGE_COLUMNS);
+            }
+        }
+    }
+    fillCtx.putImageData(out, 0, 0);
+    return fill;
+}
+
+/**
+ * Draws the auto-fill into the empty space left or right of the image in one slice.
+ *
+ * @param ctx Slice canvas context
+ * @param fill {left, right} strips from buildEdgeFill
+ * @param imageWidth Scaled image width
+ * @param x Horizontal position of the slice (in scaled px)
+ * @param y Vertical position of the slice (in scaled px)
+ * @param height Height of the region (in scaled px)
+ * @param channelHeight Output height of the image
+ */
+const drawEdgeFill = (ctx, fill, imageWidth, x, y, height, channelHeight) => {
+    // Empty space on the left: the image starts at output x = -x
+    if (x < 0) {
+        const imageStart = -x;
+        const near = Math.min(imageStart, FILL_DEPTH);
+        ctx.drawImage(fill.left, FILL_DEPTH - near, y, near, height, imageStart - near, 0, near, channelHeight);
+        if (imageStart > near) {
+            ctx.drawImage(fill.left, 0, y, 1, height, 0, 0, imageStart - near, channelHeight);
+        }
+    }
+
+    // Empty space on the right: the image ends at output x = imageWidth - x
+    const imageEnd = imageWidth - x;
+    if (imageEnd < CHANNEL_BANNER_WIDTH) {
+        ctx.drawImage(fill.right, 0, y, FILL_DEPTH, height, imageEnd, 0, FILL_DEPTH, channelHeight);
+        const farStart = imageEnd + FILL_DEPTH;
+        if (farStart < CHANNEL_BANNER_WIDTH) {
+            ctx.drawImage(fill.right, FILL_DEPTH - 1, y, 1, height, farStart, 0, CHANNEL_BANNER_WIDTH - farStart, channelHeight);
+        }
+    }
+}
+
 /**
  * Renders image on canvas in given position and returns base64 encoded image of the visible area.
  *
@@ -104,10 +215,12 @@ const getImage = async (url) => {
  * @param height Height of the region (in scaled px)
  * @param channelHeight Output height of the image
  * @param color Background color of the canvas (visible when drawing dransparent images)
+ * @param fill Auto-fill strips ({left, right}) or null when auto-fill is off
+ * @param imageWidth Scaled image width
  * @return {string} Base64 encoded image (DataURL)
  */
 
-const getClippedRegion = (canvas, img, scale, x, y, height, channelHeight, color) => {
+const getClippedRegion = (canvas, img, scale, x, y, height, channelHeight, color, fill, imageWidth) => {
     canvas.width = CHANNEL_BANNER_WIDTH;
     canvas.height = channelHeight;
 
@@ -119,6 +232,7 @@ const getClippedRegion = (canvas, img, scale, x, y, height, channelHeight, color
     ctx.fillRect(0, 0, CHANNEL_BANNER_WIDTH, channelHeight);
 
     ctx.imageSmoothingQuality = 'high';
+    if (fill) drawEdgeFill(ctx, fill, imageWidth, x, y, height, channelHeight);
     ctx.drawImage(
         img,
         x / scale, y / scale, CHANNEL_BANNER_WIDTH / scale, height / scale,
@@ -180,9 +294,10 @@ export const getRoomsHeight = (width, height, rooms, ignoreSpacing, channelsCoun
  * @param canvas Canvas Object to be used for image rendering
  * @param image Reference to image object that contains image to render
  * @param rooms Reference to rooms data from preview
+ * @param fill Auto-fill strips ({left, right}) or null
  * @param cb
  */
-const generateImages = (inputFile, options, canvas, image, rooms, cb) => {
+const generateImages = (inputFile, options, canvas, image, rooms, fill, cb) => {
     const result = [];
     const scale = inputFile.width / image.naturalWidth;
     let y = 0;
@@ -197,7 +312,9 @@ const generateImages = (inputFile, options, canvas, image, rooms, cb) => {
             -options.xOffset, options.yOffset + y,
             channelHeight,
             channelHeight,
-            options.backgroundColor)
+            options.backgroundColor,
+            fill,
+            inputFile.width)
         )
 
         y += channelHeight;
@@ -242,6 +359,15 @@ const ImageManipulation = ({children}) => {
         };
     }, [sourceImage, options.zoom]);
 
+    // Auto-fill strips only depend on the image and its scaled size, so moving the offsets doesn't rebuild them
+    const fill = useMemo(() => {
+        if (!options.autoFill || imageObject == null || sourceImage.data == null) return null;
+        return {
+            left: buildEdgeFill(imageObject, image.width, image.height, 'left'),
+            right: buildEdgeFill(imageObject, image.width, image.height, 'right'),
+        };
+    }, [options.autoFill, imageObject, image.width, image.height]);
+
     // When source image is changed loads new imageObject into canvas
     useEffect(() => {
         (async () => {
@@ -264,14 +390,14 @@ const ImageManipulation = ({children}) => {
                 const start = Date.now();
                 setExportStatus((c) => ({...c, start: start, end: null}));
 
-                debouncedGenerateImage(image, options, canvas, imageObject, rooms, (results) => {
+                debouncedGenerateImage(image, options, canvas, imageObject, rooms, fill, (results) => {
                     setResults(results);
                     const end = Date.now();
                     setExportStatus((c) => ({...c, end: end, delta: end - start}));
                 });
             }
         )();
-    }, [imageObject, options, image, rooms])
+    }, [imageObject, options, image, rooms, fill])
 
     // When input file is changed it recalculates maxSlicesCount and resets yOffset option
     useEffect(() => {
