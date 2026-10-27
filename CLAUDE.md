@@ -1,7 +1,7 @@
 # CLAUDE.md — TS6 Channel Image Generator (fork of ts5-channel-image-generator)
 
 > Handoff document for the model that will do the actual build.
-> Status: **analysis done, TS6 geometry now MEASURED from a calibration test on a real TS6 client (section 4). Build not started.** A few minor unknowns remain (section 4.3) — none block the build.
+> Status: **TS6 port built, merged and live at <https://highdmt.github.io/ts6-channel-image-generator/>.** Follow-ups added after a real-server screenshot: zoom slider, working collapse arrow in the preview, left fade-in of the name backdrop (sections 4.1 and 9). Node 16 lives at `C:\Users\clemc\tools\node-v16.20.2-win-x64`, GitHub CLI at `C:\Users\clemc\tools\gh\bin\gh.exe`.
 
 ---
 
@@ -76,7 +76,7 @@ TeamSpeak has published **no official pixel specs**. The [6.0.0-beta1 changelog]
 | Row width (depth 0) | — | **≈ 494 px** (e.g. x 24 → 517) |
 | Indent per depth | 11 | **10** (row left edge moves 10 px right per level; right edge fixed) |
 | Corner radius | 5 | **channel ≈ 9–10, spacer = fully rounded pill (15)** |
-| Selected row | — | 1 px light-grey (≈ `#C8C8C8`) outline drawn **outside** the row (~2–3 px gap), does not change layout (this is why the first reference screenshot's spacer looked 36 px tall) |
+| Hovered row | — | Row **grows 2 px on every side** (30 → 34 px tall, +4 px wide) with a 1 px `#C0C0C0` outline around it; the image does NOT move, so 2 more px of image show on each side; nothing else in the layout moves; the name backdrop follows the grown left edge (`docs/ts6-hover.png`). This is the "outline with a gap" seen earlier, and why the first reference screenshot's spacer looked 36 px tall |
 
 **How the banner image is drawn (the important part)**
 1. **Native size, no scaling.** Image is drawn at 1:1 (500 px wide image → 500 px on screen). It is *not* cover/contain-scaled.
@@ -90,12 +90,12 @@ TeamSpeak has published **no official pixel specs**. The [6.0.0-beta1 changelog]
    - **Wider than 500 px → scaled down proportionally to 500 px wide** (NOT cropped; 600×100 rendered at 0.833×, ticks 41.5 px per 50). Aspect ratio is preserved, so height shrinks too, then the vertical center-crop to 30 px applies. Consequence: the tool must always export exactly **500 px wide**; any other width changes scale and breaks continuity.
    - **Shorter than the 30 px row → centered, 1:1, not stretched or tiled**; the row background shows above and below (500×20 showed 5 px of row bg on each side). Consequence: never export slices shorter than 30 px (the planned 44/30 are fine).
    - **500×44 verified:** the displayed band is slice y 7–36 (3 px of the first band, then the next 27 px); the magenta edge markers are hidden top and bottom — continuity logic confirmed.
-   - *Possible future feature (do NOT build now):* because oversized images are scaled down, a "HiDPI export" at 1000 px wide (×2) would render sharper on high-DPI screens with identical geometry.
+   - **2x export tested** (`docs/sharpness-test/`, `docs/ts6-sharpness-1x-vs-2x.png`): a 1000×88 image is shrunk to 500×44 and cropped exactly like a 500×44 one (magenta edges hidden, ticks aligned). At 100 % Windows scaling it is **not sharper** (edge energy 1x 70.8 vs 2x 69.0, i.e. the same or a bit softer). Only worth adding if a test at 125 %+ scaling shows a gain — not built.
 
 **Client-drawn overlays (preview must replicate)**
 | Element | TS6 measured |
 |---|---|
-| Channel name backdrop | opaque `#1B1B1F` (27,27,31), **starts at the row's left edge**, solid for ≈ 88–90 px, then fades to transparent by ≈ 150 px (same structure as TS5's 150 px mask at 60 % solid). All test names were short (4–5 chars) → width assumed fixed |
+| Channel name backdrop | `#1B1B1F` (27,27,31). **Fades IN from transparent at the row's left edge to solid at ≈ 18 px** (alpha ≈ 0.055/px, measured on `ts6-calibration-a.png`), so ~10 px of image show at the left. Solid until 90 px, transparent by ≈ 150 px. **Width is fixed**: verified on a real server with "Erotic ASMR" vs "Channel 1" (both solid to 90 px); long names just run into the fade |
 | Channel icon | ≈ 20 px hex-cube, light blue-white (`#C6D5E7`-ish), left edge at `row_left + 11` |
 | Channel title | regular weight, ≈ 15 px, light grey (`~#D4D4D5`), starts at `row_left + 42` |
 | Spacer name | centered in the row, **bold**, ≈ 15 px, white-ish |
@@ -116,7 +116,7 @@ Not needed for the tool: user rows (circular ~30 px avatar, blue name), selected
 
 ### 4.3 Remaining unknowns (low risk — verify if cheap, don't block)
 1. ~~Panel resizing~~ **Resolved** (see 4.1 item 4b: image stays 500 px, left-anchored).
-2. Does a **long channel name** widen the dark name backdrop? (assumed fixed 150 px)
+2. ~~Does a long channel name widen the dark name backdrop?~~ **Resolved: no**, fixed 150 px (see 4.1 overlays).
 3. ~~Images wider / shorter than the row~~ **Resolved** (see 4.1 item 4c). Still untested: images narrower than 500 px (assumed shown 1:1, left-anchored, not upscaled) and 800 px-wide images (assumed same scale-down rule as 600).
 4. Does the client honor **UI scaling** (125–200 %) by scaling the image? (Doesn't change slicing; only affects sharpness.)
 5. Per-channel image setting: **resolved by the user — it's a plain URL** (GitHub-hosted URLs work). Exact TS6 menu label not captured; keep README wording generic. Server-query names `channel_banner_gfx_url` / `channel_banner_mode` are **not verified for TS6**.
@@ -132,7 +132,7 @@ Image layer    position absolute, left = -(10 + 10*depth) px relative to the row
                black calc(100% - 84px), transparent 100%)  — 100% = 500 px image width
                (the area of the row beyond the image just shows the row bg)
 Channel backdrop  absolute, left 0, width 150, height 100%,
-               linear-gradient(to right, #1B1B1F 0 60%, transparent 100%)
+               linear-gradient(to right, transparent 0, #1B1B1F 18px 60%, transparent 100%)
 Spacer backdrop   absolute, full width,
                linear-gradient(to right, transparent, rgba(27,27,31,.85) 50%, transparent)
 Icon           20 px, left 11 ; Title left 42, 15px, #D4D4D5 ; Spacer title centered, bold
@@ -219,3 +219,14 @@ Remove the Fit-mode switch + `coverContainExplanation.png` + popover (decided, s
 - TS6 layout/spacing feedback: <https://community.teamspeak.com/t/customization-options-for-channel-layout-and-ui-styling/60919>
 - Banner setup thread (TS5-era, unverified for TS6): <https://community.teamspeak.com/t/can-not-set-channel-banners/53501>
 - Put in the repo under `docs/`: `calibration_500x100.png`, `ts6-calibration-a.png` (8-row tree), `ts6-calibration-b.png` (same + user row), `ts6-reference.png` (no-banner rows + selected spacer), `ts6-widened-real-banners.png` (wide panel, real photo banners), `ts6-size-tests.png` (image-size rules), `calibration_500x20.png`, `calibration_500x44.png`, `calibration_600x100.png`, `calibration_800x100.png`.
+
+---
+
+## 9. Post-launch changes (branch `preview-zoom-collapse`)
+- **Zoom slider** (50–300 %, `options.zoom`), live while dragging like the other sliders. No intermediate resized image any more: `image` is a `useMemo` holding the *scaled* size (`500 × zoom` wide) and each slice is drawn straight from the original full-size image with a scale factor (`getClippedRegion`). Offsets and slice heights stay in scaled px; slices stay 500 px wide. `getSlicesCount` / `getRoomsHeight` no longer scale by `width / 500`. `resizeImageFromDataURL` and its `memoize` were removed; `crossOrigin = "Anonymous"` moved to `getImage` so URL-loaded images don't taint the canvas.
+- **Collapse in the preview**: clicking the expand button hides the sub-channels (preview state only, not exported); collapsed glyph is a blue (`#1CC9FF`, sampled) chevron-left. Rows below move up, exactly like TS6, so the picture no longer lines up while collapsed.
+- **Name backdrop left fade-in** (see 4.1).
+- **Fixed pre-existing bug**: "Load from URL" referenced an undefined `resizedImageDataURL` and always failed; now uses the URL.
+- Dev-server gotcha: after many hot reloads Next 10 served a truncated chunk ("Unexpected end of input", page not hydrated). Fix: stop the server, delete `.next`, restart.
+- **Hover in the preview** (see 4.1 "Hovered row"): `room.js` splits each row into a layout box (`RoomWrapper`, fixed 30 px) and a visible `RowSurface` that grows by the CSS variable `--grow` (0 → 2 px on hover); the image is offset by `+var(--grow)` so it stays put.
+- Screenshots from the real server: `docs/ts6-real-server.png` (photo banners, used for the backdrop and left fade measurements), `docs/ts6-hover.png`, `docs/ts6-sharpness-1x-vs-2x.png`.

@@ -1,6 +1,5 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {memoize, throttle} from "lodash";
-import {getImageMetadataFromDataURL} from "./upload";
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {throttle} from "lodash";
 
 // TeamSpeak 6 geometry, measured on a real TS6 client (see docs/ and CLAUDE.md section 4).
 // Every row (channel or spacer) is 30 px tall with a 14 px gap, so the row pitch is 44 px.
@@ -22,6 +21,7 @@ const initialValue = {
         yOffset: 0,
         xOffset: 0,
         ignoreSpacing: false,
+        zoom: 100, // % of the 500 px banner width the image is scaled to
         backgroundColor: '#00000000',
     },
     results: [null, null, null, null, null],  // By default show 5 rooms without image
@@ -46,39 +46,6 @@ const initialValue = {
 }
 
 export const ImageManipulationContext = React.createContext(initialValue);
-
-/**
- * Resizes image to maxWidth specified by the parameter.
- *
- * @param url URL of the image to be scaled down
- * @param metadata Metadata of the image
- * @param width Target max width of the result image
- * @return {Promise<unknown>}
- */
-export const resizeImageFromDataURL = async (url, metadata, width) => {
-    return new Promise((resolve, reject) => {
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d');
-
-        canvas.width = width;
-        canvas.height = metadata.height * (width / metadata.width);
-
-        const img = new Image();
-
-        img.crossOrigin = "Anonymous"
-        img.onload = () => {
-            ctx.drawImage(
-                img,
-                0, 0, metadata.width, metadata.height,
-                0, 0, canvas.width, canvas.height
-            );
-
-            resolve(canvas.toDataURL());
-        }
-
-        img.src = url;
-    })
-}
 
 /**
  * Returns height of the channel based on channel type and options
@@ -117,6 +84,7 @@ const getImage = async (url) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
 
+        img.crossOrigin = "Anonymous" // Needed so images loaded from a URL can be read back from the canvas
         img.onerror = reject
         img.onload = () => {
             resolve(img)
@@ -129,21 +97,19 @@ const getImage = async (url) => {
  * Renders image on canvas in given position and returns base64 encoded image of the visible area.
  *
  * @param canvas Canvas to render image on
- * @param img Image Object that will be rendered
- * @param x Horizontal position
- * @param y Vertical position
- * @param width Width of the source image
- * @param height height of the source image
+ * @param img Image Object that will be rendered (original, full size)
+ * @param scale Scale of the original image (scaled px per original px)
+ * @param x Horizontal position (in scaled px)
+ * @param y Vertical position (in scaled px)
+ * @param height Height of the region (in scaled px)
  * @param channelHeight Output height of the image
  * @param color Background color of the canvas (visible when drawing dransparent images)
  * @return {string} Base64 encoded image (DataURL)
  */
 
-const getClippedRegion = (canvas, img, x, y, width, height, channelHeight, color) => {
+const getClippedRegion = (canvas, img, scale, x, y, height, channelHeight, color) => {
     canvas.width = CHANNEL_BANNER_WIDTH;
     canvas.height = channelHeight;
-
-    console.log('Rendering');
 
     const ctx = canvas.getContext('2d');
 
@@ -152,9 +118,10 @@ const getClippedRegion = (canvas, img, x, y, width, height, channelHeight, color
     ctx.fillStyle = color;
     ctx.fillRect(0, 0, CHANNEL_BANNER_WIDTH, channelHeight);
 
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(
         img,
-        x, y, CHANNEL_BANNER_WIDTH, height,
+        x / scale, y / scale, CHANNEL_BANNER_WIDTH / scale, height / scale,
         0, 0, CHANNEL_BANNER_WIDTH, channelHeight
     );
 
@@ -173,12 +140,11 @@ const getClippedRegion = (canvas, img, x, y, width, height, channelHeight, color
 export const getSlicesCount = (width, height, rooms, ignoreSpacing) => {
     let count = 0;
 
-    const sizeRatio = width / CHANNEL_BANNER_WIDTH;
-
-    let remainingHeight = height * sizeRatio;
+    // Slices are cut 1:1 from the resized image, whatever its width (zoom)
+    let remainingHeight = height;
 
     for (const room of rooms) {
-        const channelHeight = getChannelHeight(room.spacer, ignoreSpacing) * sizeRatio;
+        const channelHeight = getChannelHeight(room.spacer, ignoreSpacing);
         if (remainingHeight - channelHeight < 0) break;
         remainingHeight -= channelHeight;
         count++;
@@ -199,11 +165,10 @@ export const getSlicesCount = (width, height, rooms, ignoreSpacing) => {
  */
 export const getRoomsHeight = (width, height, rooms, ignoreSpacing, channelsCount) => {
     const slicesCount = getSlicesCount(width, height, rooms, ignoreSpacing);
-    const sizeRatio = width / CHANNEL_BANNER_WIDTH;
     return rooms.reduce((acc, room, i) => {
         if (i > slicesCount - 1) return acc;
         if (channelsCount != null && i >= channelsCount) return acc;
-        return acc + (getChannelHeight(room.spacer, ignoreSpacing) * sizeRatio);
+        return acc + getChannelHeight(room.spacer, ignoreSpacing);
     }, 0);
 }
 
@@ -219,6 +184,7 @@ export const getRoomsHeight = (width, height, rooms, ignoreSpacing, channelsCoun
  */
 const generateImages = (inputFile, options, canvas, image, rooms, cb) => {
     const result = [];
+    const scale = inputFile.width / image.naturalWidth;
     let y = 0;
     for (let i = 0; i < options.slices; i++) {
         const room = rooms[i];
@@ -227,9 +193,9 @@ const generateImages = (inputFile, options, canvas, image, rooms, cb) => {
 
         // TS6 anchors the image in screen space, not per row, so nested rows need no x shift
         result.push(getClippedRegion(
-            canvas, image,
+            canvas, image, scale,
             -options.xOffset, options.yOffset + y,
-            inputFile.width, channelHeight,
+            channelHeight,
             channelHeight,
             options.backgroundColor)
         )
@@ -251,32 +217,30 @@ const THROTTLE_TIME = 50;
  */
 const debouncedGenerateImage = throttle(generateImages, THROTTLE_TIME);
 
-/**
- * Memoized resizeImageFromDataURL function that will only render new resized image only first time.
- *
- * TODO: Invalidate cache when new source image is set
- *
- * @type {(function(*, *=, *): Promise<unknown>) & MemoizedFunction}
- */
-const memoizedResizeImageFromDataURL = memoize(
-    resizeImageFromDataURL,
-    (url, metadata, width) => JSON.stringify({
-        url,
-        metadata,
-        width
-    }));
-
 const ImageManipulation = ({children}) => {
     const [sourceImage, setSourceImage] = useState(initialValue.sourceImage);
     const [rooms, setRooms] = useState(initialValue.rooms);
     const [results, setResults] = useState(initialValue.results);
     const [options, setOptions] = useState(initialValue.options);
-    const [image, setImage] = useState(initialValue.image);
     const [exportStatus, setExportStatus] = useState(initialValue.exportStatus);
     const [imageObject, setImageObject] = useState();
     const lastSourceImage = useRef(null);
 
     const [canvas, _] = useState(getCanvas())
+
+    // Size of the image after scaling. TS6 scales anything wider than 500 px down, so slices are always cut
+    // 500 px wide; zoom only changes how big the image is before it is cut. Slices are drawn straight from the
+    // original image at this scale, so moving the zoom slider is as fast as moving the offsets.
+    const image = useMemo(() => {
+        if (sourceImage.data == null) return initialValue.image;
+        const width = Math.round(CHANNEL_BANNER_WIDTH * options.zoom / 100);
+        return {
+            data: sourceImage.data,
+            width,
+            height: Math.round(sourceImage.height * width / sourceImage.width),
+            name: sourceImage.name
+        };
+    }, [sourceImage, options.zoom]);
 
     // When source image is changed loads new imageObject into canvas
     useEffect(() => {
@@ -284,23 +248,8 @@ const ImageManipulation = ({children}) => {
                 if (sourceImage.data == null) return;
                 const start = Date.now();
                 setExportStatus((c) => ({...c, start: start, end: null}));
-
-                // TS6 scales anything wider than 500 px down, so slices must always be exactly 500 px wide
-                const resizedImage = await memoizedResizeImageFromDataURL(
-                    sourceImage.data,
-                    {width: sourceImage.width, height: sourceImage.height},
-                    CHANNEL_BANNER_WIDTH
-                );
-
-                const resizedImageMetadata = await getImageMetadataFromDataURL(resizedImage);
-
-                setImage({
-                    data: resizedImage,
-                    width: resizedImageMetadata.width,
-                    height: resizedImageMetadata.height,
-                    name: sourceImage.name
-                });
-                setImageObject(await getImage(resizedImage));
+                setImageObject(null);
+                setImageObject(await getImage(sourceImage.data));
                 const end = Date.now();
                 setExportStatus((c) => ({...c, end: end, delta: end - start}));
             }
@@ -337,7 +286,6 @@ const ImageManipulation = ({children}) => {
         options,
         setOptions,
         image,
-        setImage,
         exportStatus,
         setExportStatus,
         sourceImage,
