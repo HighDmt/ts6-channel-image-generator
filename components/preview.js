@@ -1,4 +1,4 @@
-import React, {useContext, useEffect, useState} from 'react';
+import React, {useContext, useState} from 'react';
 import Room from "./room";
 import {defaultRoom, ImageManipulationContext} from "./imageManipulation";
 import {Button, Callout} from "@blueprintjs/core";
@@ -28,13 +28,6 @@ const Preview = () => {
     let {results, rooms, setRooms} = useContext(ImageManipulationContext);
     // Preview only: indexes of collapsed channels (does not affect export)
     const [collapsed, setCollapsed] = useState({});
-
-    useEffect(() => {
-        rooms.forEach((room, i) => {
-            if (rooms.length < 2) return;
-
-        })
-    }, [rooms]);
 
     const updateNthRoom = (n, diff) => {
         let newRooms = rooms.map((room, i) => {
