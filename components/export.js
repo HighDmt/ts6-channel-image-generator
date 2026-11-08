@@ -4,24 +4,27 @@ import {ImageManipulationContext} from "./imageManipulation";
 import {Button, Code, FormGroup, InputGroup, ProgressBar} from "@blueprintjs/core";
 import * as JSZip from "jszip";
 import {saveAs} from "file-saver";
+import {toaster} from "../pages";
 
 const Export = () => {
-    const {exportStatus, results, sourceImage} = useContext(ImageManipulationContext);
+    const {previewStatus, results, sourceImage} = useContext(ImageManipulationContext);
     const [fileNamePrefix, setFileNamePrefix] = useState('');
-    const [exportProgress, setExportProgress] = useState(null);
-    const [exportTimeDelta, setExportTimeDelta] = useState(null);
+    // 'idle' → 'exporting' → 'done' | 'failed'. progress drives the bar, ms = how long the last export took.
+    const [exportStatus, setExportStatus] = useState({state: 'idle', progress: 0, ms: null});
+    const setProgress = (progress) => setExportStatus((s) => ({...s, progress}));
 
-    const isGeneratingPreview = (exportStatus.end == null || exportStatus.start == null);
-    const isExporting = exportProgress != null && exportProgress !== 1;
+    const isGeneratingPreview = previewStatus.state === 'rendering';
+    const isExporting = exportStatus.state === 'exporting';
 
-    const previewTimeDeltaStr = exportStatus.delta == null ? 'N/A' : `${exportStatus.delta}ms`;
-    const exportTimeDeltaStr = exportTimeDelta == null ? 'N/A' : `${exportTimeDelta}ms`;
+    const previewFailed = previewStatus.state === 'failed';
+    const previewTimeDeltaStr = previewStatus.ms == null ? 'N/A' : `${previewStatus.ms}ms`;
+    const exportTimeDeltaStr = exportStatus.ms == null ? 'N/A' : `${exportStatus.ms}ms`;
 
     const disabled = sourceImage.data == null;
 
-    // When new results are generated invalidates current export
+    // New results make the last export outdated (but don't interrupt one that is running)
     useEffect(() => {
-        setExportProgress(null);
+        setExportStatus((s) => s.state === 'exporting' ? s : {...s, state: 'idle', progress: 0});
     }, [results])
 
     /**
@@ -33,33 +36,38 @@ const Export = () => {
      */
     const exportToZip = async () => {
         const start = Date.now();
-        setExportProgress(0.1);
-        const zip = new JSZip();
-        let filesTxt = '';
+        setExportStatus((s) => ({...s, state: 'exporting', progress: 0.1}));
+        try {
+            const zip = new JSZip();
+            let filesTxt = '';
 
-        const imagesFolder = zip.folder("images");
+            const imagesFolder = zip.folder("images");
 
-        results.forEach((result, i) => {
-            const base64Data = result.replace(/^data:image\/(png|jpg);base64,/, "");
+            results.forEach((result, i) => {
+                const base64Data = result.replace(/^data:image\/(png|jpg);base64,/, "");
 
-            const fileName = `${fileNamePrefix}${fileNamePrefix.length > 0 ? '_' : ''}${i}.png`;
+                const fileName = `${fileNamePrefix}${fileNamePrefix.length > 0 ? '_' : ''}${i}.png`;
 
-            imagesFolder.file(fileName, base64Data, {base64: true});
-            filesTxt += `${fileName}\n`;
-        })
+                imagesFolder.file(fileName, base64Data, {base64: true});
+                filesTxt += `${fileName}\n`;
+            })
 
-        setExportProgress(0.5);
+            setProgress(0.5);
 
-        zip.file("files.txt", filesTxt);
+            zip.file("files.txt", filesTxt);
 
-        const blob = await zip.generateAsync({type: "blob"})
+            const blob = await zip.generateAsync({type: "blob"})
 
-        setExportProgress(0.8);
+            setProgress(0.8);
 
-        saveAs(blob, `ts6_channel_banner_${sourceImage.name}.zip`)
+            saveAs(blob, `ts6_channel_banner_${sourceImage.name}.zip`)
 
-        setExportProgress(1);
-        setExportTimeDelta(Date.now() - start);
+            setExportStatus({state: 'done', progress: 1, ms: Date.now() - start});
+        } catch (e) {
+            console.error(e);
+            setExportStatus((s) => ({...s, state: 'failed', progress: 1}));
+            toaster.show({intent: "danger", message: "Export failed, please try again.", icon: "error"});
+        }
     }
 
     return (
@@ -67,12 +75,14 @@ const Export = () => {
             <FormGroup
                 label="Generating preview"
                 labelInfo={"(Status of preview you see on the right)"}
-                helperText={<>Last preview render time: <b>{previewTimeDeltaStr}</b></>}
+                helperText={previewFailed ? 'This image could not be read, please pick another one.'
+                    : <>Last preview render time: <b>{previewTimeDeltaStr}</b></>}
                 disabled={disabled}
             >
                 <ProgressBar
                     value={disabled ? 0 : !isGeneratingPreview}
                     animate={isGeneratingPreview}
+                    intent={previewFailed ? "danger" : "none"}
                     disabled={disabled}
                 />
             </FormGroup>
@@ -84,9 +94,9 @@ const Export = () => {
                 disabled={disabled}
             >
                 <ProgressBar
-                    value={exportProgress == null ? 0 : exportProgress}
+                    value={exportStatus.progress}
                     animate={isExporting}
-                    intent={exportProgress === 1 ? "success" : "primary"}
+                    intent={{done: "success", failed: "danger"}[exportStatus.state] ?? "primary"}
                     disabled={disabled}
                 />
             </FormGroup>
@@ -116,7 +126,7 @@ const Export = () => {
                 large={true}
                 onClick={exportToZip}
                 loading={isExporting}
-                disabled={disabled}
+                disabled={disabled || previewFailed}
                 icon={'download'}
             >
                 Export and download ZIP file

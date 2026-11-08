@@ -1,4 +1,4 @@
-import React, {useContext, useEffect, useState} from 'react';
+import React, {useContext, useEffect, useRef, useState} from 'react';
 import Step from "./step";
 import {Button, Callout, Code, FileInput, FormGroup, Icon, InputGroup} from "@blueprintjs/core";
 import styled from 'styled-components';
@@ -112,8 +112,9 @@ const loadCrossOriginImage = (src) => {
  * @return {Promise<unknown>}
  */
 const fileToDataURL = (file) => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
+        reader.onerror = reject;
         reader.onload = (e) => {
             resolve(e.target.result)
         }
@@ -145,7 +146,7 @@ export const getImageMetadataFromDataURL = (url) => {
 
 
 const Upload = () => {
-    const {sourceImage, setSourceImage, resetProject} = useContext(ImageManipulationContext);
+    const {sourceImage, loadImage, resetProject} = useContext(ImageManipulationContext);
     const [loadUrl, setLoadUrl] = useState("");
     const [isUrlLoading, setIsUrlLoading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
@@ -164,16 +165,13 @@ const Upload = () => {
             return;
         }
 
-        const dataURL = await fileToDataURL(file);
-
-        const metadata = await getImageMetadataFromDataURL(dataURL);
-
-        setSourceImage({
-            data: dataURL,
-            width: metadata.width,
-            height: metadata.height,
-            name: file.name
-        })
+        try {
+            const dataURL = await fileToDataURL(file);
+            const metadata = await getImageMetadataFromDataURL(dataURL);
+            loadImage({data: dataURL, width: metadata.width, height: metadata.height, name: file.name});
+        } catch (e) {
+            toaster.show({intent: "danger", message: "This image could not be read by your browser.", icon: "error"});
+        }
     }
 
     /**
@@ -182,6 +180,10 @@ const Upload = () => {
      * @param e Input change event
      */
     const uploadHandler = (e) => loadFile(e.target.files[0]);
+
+    // The window listeners below are added once, so they call the latest loadFile through this ref
+    const loadFileRef = useRef(loadFile);
+    loadFileRef.current = loadFile;
 
     // Drag and drop anywhere on the page, and Ctrl+V of a copied image
     useEffect(() => {
@@ -208,13 +210,13 @@ const Upload = () => {
             e.preventDefault(); // Stops the browser from opening the image
             enterCount = 0;
             setIsDragging(false);
-            loadFile(e.dataTransfer.files[0]);
+            loadFileRef.current(e.dataTransfer.files[0]);
         };
         const onPaste = (e) => {
             const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
             if (file == null) return; // Plain text paste (e.g. into the URL field) works as usual
             e.preventDefault();
-            loadFile(file);
+            loadFileRef.current(file);
         };
 
         window.addEventListener('dragenter', onDragEnter);
@@ -249,13 +251,7 @@ const Upload = () => {
 
             const metadata = await getImageMetadataFromDataURL(loadUrl);
 
-            setIsUrlLoading(false);
-            setSourceImage({
-                data: loadUrl,
-                width: metadata.width,
-                height: metadata.height,
-                name: "loaded"
-            })
+            loadImage({data: loadUrl, width: metadata.width, height: metadata.height, name: "loaded"});
         } catch (e) {
             console.error(e);
 
@@ -281,6 +277,7 @@ const Upload = () => {
                     icon: "error"
                 })
             }
+        } finally {
             setIsUrlLoading(false);
         }
     }

@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {debounce, throttle} from "lodash";
 import {clearItems, loadItem, saveItem} from "./storage";
 
@@ -41,11 +41,15 @@ const initialValue = {
         height: 30,
         width: 100
     },
-    exportStatus: {
-        start: null,
-        end: null,
-        delta: null
-    }
+    // Preview render status: 'idle' (no image) → 'rendering' → 'done', or 'failed' when the image can't be decoded.
+    // ms = how long the last finished render took.
+    previewStatus: {state: 'idle', ms: null}
+}
+
+// Size of the source image once scaled to the zoom (% of the 500 px banner width)
+const scaledSize = (source, zoom) => {
+    const width = Math.round(CHANNEL_BANNER_WIDTH * zoom / 100);
+    return {width, height: Math.round(source.height * width / source.width)};
 }
 
 export const ImageManipulationContext = React.createContext(initialValue);
@@ -406,9 +410,10 @@ const ImageManipulation = ({children}) => {
     const [rooms, setRooms] = useState(initialValue.rooms);
     const [results, setResults] = useState(initialValue.results);
     const [options, setOptions] = useState(initialValue.options);
-    const [exportStatus, setExportStatus] = useState(initialValue.exportStatus);
-    const [imageObject, setImageObject] = useState();
-    const lastSourceImage = useRef(null);
+    const [previewStatus, setPreviewStatus] = useState(initialValue.previewStatus);
+    // Decoded image, paired with the source it came from so a new image never renders with the old picture
+    const [decoded, setDecoded] = useState(null);
+    const imageObject = decoded?.source === sourceImage ? decoded.img : null;
     const [restored, setRestored] = useState(false); // Nothing is saved until the saved project is loaded back
 
     const [canvas, _] = useState(getCanvas())
@@ -418,13 +423,7 @@ const ImageManipulation = ({children}) => {
     // original image at this scale, so moving the zoom slider is as fast as moving the offsets.
     const image = useMemo(() => {
         if (sourceImage.data == null) return initialValue.image;
-        const width = Math.round(CHANNEL_BANNER_WIDTH * options.zoom / 100);
-        return {
-            data: sourceImage.data,
-            width,
-            height: Math.round(sourceImage.height * width / sourceImage.width),
-            name: sourceImage.name
-        };
+        return {data: sourceImage.data, name: sourceImage.name, ...scaledSize(sourceImage, options.zoom)};
     }, [sourceImage, options.zoom]);
 
     // The auto-fill canvas only depends on the image and its scaled size, so moving the offsets doesn't rebuild it
@@ -435,33 +434,28 @@ const ImageManipulation = ({children}) => {
 
     // When source image is changed loads new imageObject into canvas
     useEffect(() => {
-        (async () => {
-                if (sourceImage.data == null) return;
-                const start = Date.now();
-                setExportStatus((c) => ({...c, start: start, end: null}));
-                setImageObject(null);
-                setImageObject(await getImage(sourceImage.data));
-                const end = Date.now();
-                setExportStatus((c) => ({...c, end: end, delta: end - start}));
-            }
-        )();
+        if (sourceImage.data == null) return;
+        let stale = false; // A newer image was picked before this one finished decoding
+        setPreviewStatus((s) => ({...s, state: 'rendering'}));
+        getImage(sourceImage.data)
+            .then((img) => !stale && setDecoded({source: sourceImage, img}))
+            .catch(() => {
+                if (stale) return;
+                setResults(initialValue.results); // Don't keep showing (and exporting) the previous image
+                setPreviewStatus((s) => ({...s, state: 'failed'}));
+            });
+        return () => { stale = true; };
     }, [sourceImage])
 
     // When inputFile or options are changed it generates new result images
     useEffect(() => {
-        (async () => {
-                if (imageObject == null) return;
-
-                const start = Date.now();
-                setExportStatus((c) => ({...c, start: start, end: null}));
-
-                debouncedGenerateImage(image, options, canvas, imageObject, rooms, fill, (results) => {
-                    setResults(results);
-                    const end = Date.now();
-                    setExportStatus((c) => ({...c, end: end, delta: end - start}));
-                });
-            }
-        )();
+        if (imageObject == null) return;
+        const start = Date.now();
+        setPreviewStatus((s) => ({...s, state: 'rendering'}));
+        debouncedGenerateImage(image, options, canvas, imageObject, rooms, fill, (results) => {
+            setResults(results);
+            setPreviewStatus({state: 'done', ms: Date.now() - start});
+        });
     }, [imageObject, options, image, rooms, fill])
 
     // Loads the project saved in this browser, if any
@@ -472,8 +466,7 @@ const ImageManipulation = ({children}) => {
                 setRooms(initialValue.rooms.map((room, i) => settings.rooms[i] ?? room));
             }
             if (savedImage?.data) {
-                lastSourceImage.current = savedImage; // Keep the saved offsets instead of resetting them below
-                setSourceImage(savedImage);
+                setSourceImage(savedImage); // Not loadImage: keeps the saved offsets
                 setOptions({...initialValue.options, ...settings?.options});
             }
             setRestored(true);
@@ -490,31 +483,32 @@ const ImageManipulation = ({children}) => {
 
     const resetProject = () => {
         debouncedSaveSettings.cancel();
+        debouncedGenerateImage.cancel(); // A pending render would bring the old slices back
         clearItems();
         setSourceImage(initialValue.sourceImage);
-        setImageObject(null);
         setOptions(initialValue.options);
         setRooms(initialValue.rooms);
         setResults(initialValue.results);
+        setPreviewStatus(initialValue.previewStatus);
     };
 
-    // When input file is changed it recalculates maxSlicesCount and resets yOffset option
-    useEffect(() => {
-        if (lastSourceImage.current === sourceImage) return;
-        const slices = getSlicesCount(image.width, image.height, rooms, options.ignoreSpacing);
-        setOptions((o) => ({...o, slices, yOffset: 0, xOffset: 0}))
-        lastSourceImage.current = sourceImage;
-    }, [image])
+    // A new image picked by the user: use as many channels as fit and reset the offsets
+    const loadImage = (newImage) => {
+        setSourceImage(newImage);
+        setOptions((o) => {
+            const {width, height} = scaledSize(newImage, o.zoom);
+            return {...o, slices: getSlicesCount(width, height, rooms, o.ignoreSpacing), yOffset: 0, xOffset: 0};
+        });
+    };
 
     const value = {
         results,
         options,
         setOptions,
         image,
-        exportStatus,
-        setExportStatus,
+        previewStatus,
         sourceImage,
-        setSourceImage,
+        loadImage,
         rooms,
         setRooms,
         resetProject
